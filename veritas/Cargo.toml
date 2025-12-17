@@ -1,0 +1,17 @@
+[package]
+name = "libveritas"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+spacedb = { git = "https://github.com/buffrr/spacedb.git", branch = "borsh", default-features = false }
+spaces_protocol = {workspace = true}
+spaces_ptr = {workspace = true}
+serde = { version = "1.0", features = ["derive"] }
+base64 = "0.22"
+risc0-zkvm = { version = "^3.0.1", default-features = false, features = ["std"] }
+borsh = { version = "1.5", features = ["derive", "std"] }
+hex = "0.4"
+libveritas_methods = { path = "../methods" }
+libveritas_zk = {path = "../zk"}
+

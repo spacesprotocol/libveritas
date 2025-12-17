@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = ["methods", "zk", "veritas"]
+
+[workspace.dependencies]
+spaces_protocol = { git = "https://github.com/spacesprotocol/spaces", features = ["std"], branch = "subspaces" }
+spaces_ptr = { git = "https://github.com/spacesprotocol/spaces", features = ["std"], branch = "subspaces" }
