@@ -1,0 +1,12 @@
+[package]
+name = "libveritas-python"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+name = "libveritas_python"
+
+[dependencies]
+libveritas-uniffi = { path = "../uniffi" }
+uniffi = { version = "0.29" }

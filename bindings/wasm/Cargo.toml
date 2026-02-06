@@ -1,0 +1,20 @@
+[package]
+name = "libveritas-wasm"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+libveritas = { path = "../../veritas" }
+borsh = { version = "1.6" }
+serde = { version = "1.0" }
+serde_json = "1.0"
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+serde-wasm-bindgen = "0.6"
+spaces_ptr = { workspace = true }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3"

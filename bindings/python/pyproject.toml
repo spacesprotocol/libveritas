@@ -1,0 +1,27 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "libveritas"
+version = "0.1.0"
+description = "Stateless verification for Bitcoin handles using the Spaces protocol"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "spacesprotocol" }]
+keywords = ["bitcoin", "spaces", "verification"]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+Homepage = "https://github.com/spacesprotocol/libveritas"
+Repository = "https://github.com/spacesprotocol/libveritas"
+
+[tool.maturin]
+bindings = "uniffi"
+manifest-path = "Cargo.toml"
+compatibility = "manylinux2014"

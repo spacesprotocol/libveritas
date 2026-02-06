@@ -1,7 +1,9 @@
 [workspace]
 resolver = "2"
-members = ["methods", "zk", "veritas"]
+members = ["methods", "zk", "veritas", "testutil", "bindings/wasm", "bindings/uniffi", "bindings/python"]
 
 [workspace.dependencies]
-spaces_protocol = { git = "https://github.com/spacesprotocol/spaces", features = ["std"], branch = "subspaces" }
-spaces_ptr = { git = "https://github.com/spacesprotocol/spaces", features = ["std"], branch = "subspaces" }
+spaces_protocol = { git = "https://github.com/spacesprotocol/spaces.git", branch = "subspaces", features = ["std"] }
+spaces_ptr = { git = "https://github.com/spacesprotocol/spaces.git", branch = "subspaces",  features = ["std"] }
+borsh_utils = { git = "https://github.com/spacesprotocol/spaces.git", branch = "subspaces" }
+spacedb = { git = "https://github.com/spacesprotocol/spacedb.git", version = "0.0.9", default-features = false, features = ["extras"] }

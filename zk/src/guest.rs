@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
-use spacedb::{Hash, Sha256Hasher, subtree::{SubTree, ValueOrHash}, VerifyError};
+use spacedb::{Hash, Sha256Hasher, subtree::{SubTree, ValueOrHash}, VerifyError, NodeHasher};
 use crate::BatchReader;
 
 
@@ -47,6 +47,7 @@ pub fn run(subtree: Vec<u8>, input: Vec<u8>, policy_step: [u32; 8], policy_fold:
                     match e {
                         VerifyError::IncompleteProof => GuestError::IncompleteSubTree,
                         VerifyError::KeyNotFound => GuestError::IncompleteSubTree,
+                        VerifyError::RootMismatch => GuestError::IncompleteSubTree,
                         VerifyError::KeyExists => GuestError::KeyExists,
                     }
                 }
@@ -62,7 +63,12 @@ pub fn run(subtree: Vec<u8>, input: Vec<u8>, policy_step: [u32; 8], policy_fold:
         space: reader.space_hash().try_into().expect("space hash error"),
         initial_root,
         final_root,
-        transcript: final_root,
+        transcript: {
+            let mut msg = [0u8; 64];
+            msg[..32].copy_from_slice(&initial_root);
+            msg[32..].copy_from_slice(&final_root);
+            Sha256Hasher::hash(&msg)
+        },
         policy_step,
         policy_fold,
         kind: CommitmentKind::Step,

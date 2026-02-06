@@ -1,2 +1,32 @@
 **/target
 .idea
+
+# React Native generated files (built by CI)
+bindings/react-native/node_modules
+bindings/react-native/lib
+bindings/react-native/src/generated
+bindings/react-native/src/Native*
+bindings/react-native/src/index.ts
+bindings/react-native/cpp
+bindings/react-native/ios
+bindings/react-native/android
+bindings/react-native/*.podspec
+bindings/react-native/*.xcframework
+
+# Python build artifacts
+bindings/python/*.egg-info
+bindings/python/dist
+**/__pycache__
+
+# Go generated bindings (published to separate repo)
+bindings/go/*.go
+bindings/go/*.so
+bindings/go/*.dylib
+bindings/go/go.mod
+bindings/go/go.sum
+
+# WASM build output
+examples/js/pkg
+
+# UniFFI generated bindings
+bindings/uniffi/bindings

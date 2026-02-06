@@ -1,0 +1,56 @@
+name: Publish npm (WASM)
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Install clang/LLVM
+        run: sudo apt-get update && sudo apt-get install -y llvm lld clang
+
+      - name: Build WASM package
+        run: |
+          wasm-pack build bindings/wasm/ \
+            --target nodejs \
+            --out-dir ../../pkg \
+            --out-name libveritas
+
+      - name: Set package version from tag
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cd pkg
+          # wasm-pack generates package.json; patch the name and version
+          jq --arg v "$VERSION" --arg n "@spacesprotocol/libveritas" \
+            '.name = $n | .version = $v' package.json > package.json.tmp
+          mv package.json.tmp package.json
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish to npm
+        run: npm publish --access public
+        working-directory: pkg
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
