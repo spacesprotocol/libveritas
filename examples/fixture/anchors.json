@@ -1,0 +1,18 @@
+[
+  {
+    "spaces_root": "6243eee1459193a86f801250ab75fdf5a96e829d1846a6a51e9aa2c1c88db73b",
+    "ptrs_root": "81e10fb6592ce87d8cd1f109eae29d584d9bf684468e042d77863bdcb47921aa",
+    "block": {
+      "hash": "ba232401ad870c4fc435b8b8bb71ab4a78bd7aa9a96cb535127126e2cbd0208b",
+      "height": 145
+    }
+  },
+  {
+    "spaces_root": "6243eee1459193a86f801250ab75fdf5a96e829d1846a6a51e9aa2c1c88db73b",
+    "ptrs_root": "81e10fb6592ce87d8cd1f109eae29d584d9bf684468e042d77863bdcb47921aa",
+    "block": {
+      "hash": "ba232401ad870c4fc435b8b8bb71ab4a78bd7aa9a96cb535127126e2cbd0208b",
+      "height": 0
+    }
+  }
+]

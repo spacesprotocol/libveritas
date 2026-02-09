@@ -1,0 +1,21 @@
+[package]
+name = "libveritas_testutil"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+libveritas = { path = "../veritas" }
+libveritas_methods = { path = "../methods" }
+libveritas_zk = { path = "../zk" }
+spacedb = { workspace = true }
+spaces_protocol = { workspace = true }
+spaces_ptr = { workspace = true }
+borsh_utils = { workspace = true }
+borsh = { version = "1.6", features = ["derive", "std"] }
+bitcoin = { version = "0.32", default-features = false, features = ["rand-std"] }
+risc0-zkvm = { version = "^3.0.1", default-features = false, features = ["std"] }
+serde_json = "1.0"
+
+[[bin]]
+name = "generate-fixture"
+path = "../examples/generate_fixture.rs"

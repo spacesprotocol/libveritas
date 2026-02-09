@@ -1,0 +1,16 @@
+---
+rust:
+  directory: ../..
+  manifestPath: bindings/uniffi/Cargo.toml
+
+android:
+  targets:
+    - arm64-v8a
+    - armeabi-v7a
+    - x86_64
+    - x86
+
+ios:
+  targets:
+    - aarch64-apple-ios
+    - aarch64-apple-ios-sim

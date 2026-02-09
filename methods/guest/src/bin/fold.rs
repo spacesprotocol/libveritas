@@ -34,7 +34,7 @@ fn main() {
 
     let mut transcript_msg = [0u8;64];
     transcript_msg[..32].copy_from_slice(&c1.transcript);
-    transcript_msg[32..].copy_from_slice(&c2.transcript);
+    transcript_msg[32..].copy_from_slice(&c2.final_root);
     let transcript = Impl::hash_bytes(&transcript_msg).as_bytes().try_into().expect("works");
 
     env::commit(&Commitment {

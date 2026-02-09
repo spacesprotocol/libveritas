@@ -1,0 +1,74 @@
+name: Publish PyPI (Python)
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            args: --compatibility manylinux2014
+          - os: macos-latest
+            args: ""
+          - os: windows-latest
+            args: ""
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set version from tag
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i.bak "s/^version = \"0.1.0\"/version = \"$VERSION\"/" bindings/python/pyproject.toml
+          sed -i.bak "s/^version = \"0.1.0\"/version = \"$VERSION\"/" bindings/python/Cargo.toml
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: python
+          args: --release ${{ matrix.args }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: bindings/python/target/wheels/*.whl
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          merge-multiple: true
+          path: dist
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Publish to PyPI
+        run: |
+          pip install twine
+          twine upload dist/*
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}

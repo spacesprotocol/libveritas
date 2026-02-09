@@ -1,0 +1,64 @@
+name: Publish Go bindings
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install uniffi-bindgen-go
+        run: cargo install uniffi-bindgen-go --git https://github.com/NordSecurity/uniffi-bindgen-go --tag v0.4.0+v0.28.3
+
+      - name: Build shared library
+        run: cargo build -p libveritas-uniffi --release
+
+      - name: Generate Go bindings
+        run: |
+          uniffi-bindgen-go \
+            --library target/release/liblibveritas_uniffi.so \
+            --out-dir go-publish/
+
+      - name: Setup Go module
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cd go-publish
+
+          # Initialize Go module
+          cat > go.mod << EOF
+          module github.com/spacesprotocol/libveritas-go
+
+          go 1.21
+          EOF
+
+          # Copy shared library
+          cp ../target/release/liblibveritas_uniffi.so .
+
+      - name: Publish to libveritas-go repo
+        env:
+          GH_TOKEN: ${{ secrets.GO_PUBLISH_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          cd go-publish
+
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Release ${VERSION}"
+          git tag "${VERSION}"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/spacesprotocol/libveritas-go.git"
+          git push origin main --force
+          git push origin "${VERSION}"

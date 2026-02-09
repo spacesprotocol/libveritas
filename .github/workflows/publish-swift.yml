@@ -1,0 +1,143 @@
+name: Publish Swift (XCFramework)
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: >-
+            aarch64-apple-ios,
+            aarch64-apple-ios-sim,
+            x86_64-apple-ios,
+            aarch64-apple-darwin,
+            x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build static libraries
+        run: |
+          for target in aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-darwin x86_64-apple-darwin; do
+            echo "==> Building $target"
+            cargo build -p libveritas-uniffi --release --target "$target"
+          done
+
+      - name: Generate Swift bindings
+        run: |
+          cargo run --bin uniffi-bindgen generate \
+            --library target/aarch64-apple-darwin/release/liblibveritas_uniffi.a \
+            --language swift \
+            --out-dir swift-bindings
+
+      - name: Prepare headers and modulemap
+        run: |
+          mkdir -p headers
+          cp swift-bindings/libveritas_uniffiFFI.h headers/
+          cp swift-bindings/libveritas_uniffiFFI.modulemap headers/module.modulemap
+
+      - name: Create fat binaries with lipo
+        run: |
+          mkdir -p lipo/ios-sim lipo/macos
+
+          # iOS simulator: arm64 + x86_64
+          lipo -create \
+            target/aarch64-apple-ios-sim/release/liblibveritas_uniffi.a \
+            target/x86_64-apple-ios/release/liblibveritas_uniffi.a \
+            -output lipo/ios-sim/liblibveritas_uniffi.a
+
+          # macOS: arm64 + x86_64
+          lipo -create \
+            target/aarch64-apple-darwin/release/liblibveritas_uniffi.a \
+            target/x86_64-apple-darwin/release/liblibveritas_uniffi.a \
+            -output lipo/macos/liblibveritas_uniffi.a
+
+      - name: Build XCFramework
+        run: |
+          xcodebuild -create-xcframework \
+            -library target/aarch64-apple-ios/release/liblibveritas_uniffi.a \
+            -headers headers/ \
+            -library lipo/ios-sim/liblibveritas_uniffi.a \
+            -headers headers/ \
+            -library lipo/macos/liblibveritas_uniffi.a \
+            -headers headers/ \
+            -output LibveritasFFI.xcframework
+
+      - name: Zip XCFramework and compute checksum
+        id: checksum
+        run: |
+          zip -r LibveritasFFI.xcframework.zip LibveritasFFI.xcframework
+          CHECKSUM=$(shasum -a 256 LibveritasFFI.xcframework.zip | awk '{print $1}')
+          echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
+          echo "XCFramework checksum: $CHECKSUM"
+
+      - name: Publish to libveritas-swift repo
+        env:
+          GH_TOKEN: ${{ secrets.SWIFT_PUBLISH_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          CHECKSUM="${{ steps.checksum.outputs.checksum }}"
+
+          mkdir -p swift-publish/Sources/Libveritas
+          cp swift-bindings/libveritas_uniffi.swift swift-publish/Sources/Libveritas/
+
+          # Generate Package.swift pointing to the release asset on the main repo
+          cat > swift-publish/Package.swift << EOF
+          // swift-tools-version: 5.9
+          import PackageDescription
+
+          let package = Package(
+              name: "Libveritas",
+              platforms: [
+                  .iOS(.v13),
+                  .macOS(.v10_15),
+              ],
+              products: [
+                  .library(name: "Libveritas", targets: ["Libveritas", "LibveritasFFI"]),
+              ],
+              targets: [
+                  .target(
+                      name: "Libveritas",
+                      dependencies: ["LibveritasFFI"],
+                      path: "Sources/Libveritas"
+                  ),
+                  .binaryTarget(
+                      name: "LibveritasFFI",
+                      url: "https://github.com/spacesprotocol/libveritas-swift/releases/download/${VERSION}/LibveritasFFI.xcframework.zip",
+                      checksum: "${CHECKSUM}"
+                  ),
+              ]
+          )
+          EOF
+
+          cd swift-publish
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Release ${VERSION}"
+          git tag "${VERSION}"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/spacesprotocol/libveritas-swift.git"
+          git push origin main --force
+          git push origin "${VERSION}"
+
+      - name: Upload XCFramework to swift repo release
+        env:
+          GH_TOKEN: ${{ secrets.SWIFT_PUBLISH_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          gh release create "${VERSION}" \
+            --repo spacesprotocol/libveritas-swift \
+            --title "${VERSION}" \
+            --notes "Generated from spacesprotocol/libveritas ${VERSION}" \
+            LibveritasFFI.xcframework.zip

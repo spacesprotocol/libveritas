@@ -11,99 +11,229 @@ use spaces_protocol::bitcoin::ScriptBuf;
 use spaces_protocol::hasher::{KeyHasher, OutpointKey};
 use spaces_protocol::slabel::SLabel;
 use spaces_protocol::SpaceOut;
-use spaces_ptr::{Commitment, CommitmentKey, PtrOut, RegistryKey};
+use spaces_ptr::{ChainProofRequest, Commitment, CommitmentKey, PtrKeyKind, PtrOut, RegistryKey};
 use spaces_ptr::sptr::Sptr;
 use crate::sname::{Label, SName};
 
-// Maximum buffer size for SubTree serialization (8 KB should be sufficient)
-const SUBTREE_ENCODE_BUFFER_SIZE: usize = 1024 * 8;
+const SUBTREE_ENCODE_BUFFER_SIZE: usize = 1024 * 100;
 
-/// A certificate proving ownership for a space handle.
+/// Current certificate version.
+pub const CERTIFICATE_VERSION: u8 = 2;
+
+/// A slim offline backup certificate for space handle ownership.
 ///
-/// A certificate binds a [`subject`](Certificate::subject) (the space name being certified)
-/// to a [`witness`](Certificate::witness) that proves the certificate's validity through
-/// on-chain inclusion proofs and any off-chain delegation chains.
+/// Certificate contains only data that cannot be recovered from a spaced client:
+/// - The ZK receipt (for root certs, produced by the operator)
+/// - Handle subtree proofs (from the operator's off-chain tree)
+/// - Signatures and identity information
 ///
-/// # Verification
+/// On-chain proofs (spaces tree, ptrs tree) are always recoverable from any
+/// spaced client and are not stored in the certificate. They are assembled
+/// into a [`CertificateBundle`](crate::bundle::CertificateBundle) for verification.
 ///
-/// Certificates form a chain of trust:
-/// - **Root certificates** prove a space exists on-chain via merkle inclusion proofs
-/// - **Leaf certificates** prove delegation from a root space to a subspace handle
+/// # Certificate Types
 ///
-/// # Example
-///
-/// For `alice@bitcoin`:
-/// - A `Root` witness proves `bitcoin` is registered on-chain
-/// - For `keys@bitcoin`, a `Leaf` witness proves delegation from `bitcoin`
+/// - **Root certificates** (`Witness::Root`) — for top-level spaces (e.g., `@bitcoin`)
+/// - **Leaf certificates** (`Witness::Leaf`) — for handles under a space (e.g., `alice@bitcoin`)
+///   - Final: handle is committed to the operator's tree (inclusion proof)
+///   - Temporary: handle is authorized by parent signature (exclusion proof)
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Certificate {
+    /// Certificate format version for future compatibility.
+    pub version: u8,
     /// The space handle this certificate attests to.
     pub subject: SName,
-    /// The proof of validity for this certificate.
+    /// The witness proving this certificate's validity.
     pub witness: Witness,
 }
 
-/// Proof of validity for a certificate.
-///
-/// A witness provides cryptographic evidence that a space handle is valid,
-/// either through on-chain state proofs or off-chain delegation.
+/// Witness for a certificate, containing only non-recoverable proof data.
 #[derive(Clone, Serialize, Deserialize)]
 pub enum Witness {
-    /// Witness for a top-level space registered on-chain.
-    ///
-    /// Contains merkle proofs against the on-chain spaces tree and optional
-    /// ZK receipts proving commitment validity.
+    /// Root certificate for a top-level space.
     Root {
-        /// Merkle proof of the space's inclusion in the main on-chain spaces tree.
-        inclusion: SpacesSubtree,
-        /// Partial merkle paths from the pointers subtree containing
-        /// commitment data and delegate information for the space.
-        ptrs: Option<PtrsSubtree>,
-        /// A ZK validity receipt recursively proving a commitment is valid
-        /// up to the attested root hash.
-        commitment: Option<Receipt>,
+        /// ZK receipt proving commitment validity. May prove a NEWER commitment
+        /// than the certificate's `commitment_root` (recursive coverage).
+        receipt: Option<Receipt>,
+        /// Optional URL where clients can fetch full bundles for this space.
+        cert_relay: Option<String>,
     },
-    /// Witness for a delegated handle managed off-chain by an operator.
-    ///
-    /// Leaf witnesses prove that a handle was delegated from a parent space
-    /// and track key rotation state.
+    /// Leaf certificate for a delegated handle.
     Leaf {
         /// The genesis script pubkey the handle was initialized with.
         /// This key may have been rotated on-chain since creation.
-        ///
-        /// **Warning**: Do not use directly for signature verification.
         genesis_spk: ScriptBuf,
-        /// The type of leaf proof and its associated data.
-        kind: LeafKind,
+        /// Handle subtree proof:
+        /// - For final certs (signature is None): inclusion proof
+        /// - For temporary certs (signature is Some): exclusion proof
+        handles: HandleSubtree,
+        /// Present for temporary certificates — a schnorr signature from
+        /// the parent delegate/owner authorizing this handle.
+        /// None for final certificates (committed to operator's tree).
+        signature: Option<Signature>,
     },
 }
 
-/// The type of proof for a delegated leaf handle.
-#[derive(Clone, Serialize, Deserialize)]
-pub enum LeafKind {
-    /// A finalized handle with full inclusion proofs.
+impl Certificate {
+    /// Creates a new certificate with the current version.
+    pub fn new(subject: SName, witness: Witness) -> Self {
+        Self {
+            version: CERTIFICATE_VERSION,
+            subject,
+            witness,
+        }
+    }
+
+    pub fn from_slice(bytes: &[u8]) -> Result<Self, std::io::Error> {
+        borsh::from_slice(bytes)
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        borsh::to_vec(self).expect("certificate serialization should not fail")
+    }
+
+    /// Returns true if this is a leaf certificate.
+    pub fn is_leaf(&self) -> bool {
+        matches!(self.witness, Witness::Leaf { .. })
+    }
+
+    /// Returns true if this is a temporary leaf certificate.
+    /// Root certificates are never temporary.
+    pub fn is_temporary(&self) -> bool {
+        matches!(
+            self.witness,
+            Witness::Leaf { signature: Some(_), .. }
+        )
+    }
+
+    /// Returns true if this is a final certificate.
+    /// Root certificates are always final. Leaf certificates are final
+    /// when committed (no signature).
+    pub fn is_final(&self) -> bool {
+        match &self.witness {
+            Witness::Root { .. } => true,
+            Witness::Leaf { signature, .. } => signature.is_none(),
+        }
+    }
+
+    /// Returns the cert relay URL if available.
+    pub fn cert_relay(&self) -> Option<&str> {
+        match &self.witness {
+            Witness::Root { cert_relay, .. } => cert_relay.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Returns the genesis script pubkey if this is a leaf certificate.
+    pub fn genesis_spk(&self) -> Option<&ScriptBuf> {
+        match &self.witness {
+            Witness::Leaf { genesis_spk, .. } => Some(genesis_spk),
+            _ => None,
+        }
+    }
+
+    /// Returns the Sptr derived from the genesis script pubkey if this is a leaf certificate.
+    pub fn sptr(&self) -> Option<Sptr> {
+        self.genesis_spk().map(|spk| Sptr::from_spk::<KeyHash>(spk.clone()))
+    }
+}
+
+pub trait ChainProofRequestUtils {
+    fn add(&mut self, cert: &Certificate);
+    fn from_certificates<'a>(certs: impl Iterator<Item = &'a Certificate>) -> Self;
+
+    fn add_subtree(&mut self, space: &SLabel, handles: &HandleSubtree);
+}
+
+impl ChainProofRequestUtils for ChainProofRequest {
+
+    /// Add keys needed to verify a certificate.
+    fn add(&mut self, cert: &Certificate) {
+        let Some(space) = cert.subject.space() else {
+            return;
+        };
+
+        // Space proof
+        if !self.spaces.iter().any(|s| s == &space) {
+            self.spaces.push(space.clone());
+        }
+
+        // Registry key for commitment tip
+        let registry_key = RegistryKey::from_slabel::<KeyHash>(&space);
+        if !self.ptrs_keys.iter().any(|k| matches!(k, PtrKeyKind::Registry(r) if *r == registry_key)) {
+            self.ptrs_keys.push(PtrKeyKind::Registry(registry_key));
+        }
+
+        match &cert.witness {
+            Witness::Root { .. } => {}
+            Witness::Leaf { genesis_spk, handles, .. } => {
+                // Commitment key for epoch root (only if tree is non-empty)
+                if !handles.0.is_empty() {
+                    if let Ok(root) = handles.compute_root() {
+                        let ck = CommitmentKey::new::<KeyHash>(&space, root);
+                        if !self.ptrs_keys.iter().any(|k| matches!(k, PtrKeyKind::Commitment(c) if *c == ck)) {
+                            self.ptrs_keys.push(PtrKeyKind::Commitment(ck));
+                        }
+                    }
+                }
+
+                // Sptr key for key rotation lookup
+                let sptr = Sptr::from_spk::<KeyHash>(genesis_spk.clone());
+                if !self.ptrs_keys.iter().any(|k| matches!(k, PtrKeyKind::Sptr(s) if *s == sptr)) {
+                    self.ptrs_keys.push(PtrKeyKind::Sptr(sptr));
+                }
+            }
+        }
+    }
+
+    /// Build from an iterator of certificates.
+     fn from_certificates<'a>(certs: impl Iterator<Item = &'a Certificate>) -> Self {
+        let mut req = Self {
+            spaces: vec![],
+            ptrs_keys: vec![],
+        };
+        for cert in certs {
+            req.add(cert);
+        }
+        req
+    }
+
+    /// Add keys from a handle subtree for a space.
     ///
-    /// The handle has been committed to the operator's tree and can be
-    /// verified against it.
-    Final {
-        /// Merkle proof of the handle's inclusion in the off-chain tree
-        /// managed by the operator.
-        inclusion: HandleSubtree,
-        /// Merkle proof for existence or non-existence of a key rotation
-        /// for this handle. Used to determine the current valid signing key.
-        key_rotation: PtrsSubtree,
-    },
-    /// A temporary handle not yet committed to the operator's tree.
-    ///
-    /// Temporary handles are authorized by parent signature and may have
-    /// an exclusion proof showing they haven't been revoked.
-    Temporary {
-        /// Optional exclusion proof showing this handle is not in the
-        /// operator's revocation tree (required if parent has at least one commitment).
-        exclusion: Option<HandleSubtree>,
-        /// A schnorr signature from the parent authorizing this handle.
-        signature: Signature,
-    },
+    /// Iterates the subtree to extract genesis_spk values and compute sptr keys.
+    fn add_subtree(&mut self, space: &SLabel, handles: &HandleSubtree) {
+        // Space proof
+        if !self.spaces.iter().any(|s| s == space) {
+            self.spaces.push(space.clone());
+        }
+
+        // Registry key for commitment tip
+        let registry_key = RegistryKey::from_slabel::<KeyHash>(space);
+        if !self.ptrs_keys.iter().any(|k| matches!(k, PtrKeyKind::Registry(r) if *r == registry_key)) {
+            self.ptrs_keys.push(PtrKeyKind::Registry(registry_key));
+        }
+
+        if handles.0.is_empty() {
+            return;
+        }
+
+        // Commitment key for subtree root
+        if let Ok(root) = handles.compute_root() {
+            let ck = CommitmentKey::new::<KeyHash>(space, root);
+            if !self.ptrs_keys.iter().any(|k| matches!(k, PtrKeyKind::Commitment(c) if *c == ck)) {
+                self.ptrs_keys.push(PtrKeyKind::Commitment(ck));
+            }
+        }
+
+        // Sptr keys from all handles in subtree
+        for (_, genesis_spk_bytes) in handles.0.iter() {
+            let genesis_spk = ScriptBuf::from_bytes(genesis_spk_bytes.to_vec());
+            let sptr = Sptr::from_spk::<KeyHash>(genesis_spk);
+            if !self.ptrs_keys.iter().any(|k| matches!(k, PtrKeyKind::Sptr(s) if *s == sptr)) {
+                self.ptrs_keys.push(PtrKeyKind::Sptr(sptr));
+            }
+        }
+    }
 }
 
 /// A 64-byte Schnorr signature.
@@ -146,7 +276,6 @@ pub enum SpacesValue {
 
 pub enum PtrsValue {
     UTXO(PtrOut),
-    Space(SLabel),
     CommitmentTip(Hash),
     Commitment(Commitment),
     Unknown(Vec<u8>),
@@ -158,18 +287,24 @@ impl HandleSubtree {
         Ok(self.0.compute_root()?)
     }
 
+    pub fn inner(&mut self) -> &mut SubTree<Sha256Hasher> {
+        &mut self.0
+    }
+
     pub fn contains_subspace(&self, label: &Label, genesis_spk: &ScriptBuf) -> Result<bool, SubtreeError> {
         let key = Sha256Hasher::hash(label.as_slabel().as_ref());
-        let spkh = Sha256Hasher::hash(genesis_spk.as_bytes());
 
         if !self.0.contains(&key)? {
             return Ok(false);
         }
-        Ok(self.0.iter().any(|(k, v)| *k == key && *v == spkh))
+
+        let genesis_spk_matches = self.0.iter()
+            .any(|(k, v)| *k == key && *v == genesis_spk.as_bytes());
+        Ok(genesis_spk_matches)
     }
 }
 
-struct KeyHash;
+pub struct KeyHash;
 
 impl KeyHasher for KeyHash {
     fn hash(data: &[u8]) -> spaces_protocol::hasher::Hash {
@@ -182,6 +317,10 @@ impl SpacesSubtree {
         SpacesIter {
             inner: self.0.iter(),
         }
+    }
+
+    pub fn inner(&mut self) -> &mut SubTree<Sha256Hasher> {
+        &mut self.0
     }
 
     pub fn compute_root(&self) -> Result<Hash, SubtreeError> {
@@ -222,6 +361,10 @@ impl PtrsSubtree {
         }
     }
 
+    pub fn inner(&mut self) -> &mut SubTree<Sha256Hasher> {
+        &mut self.0
+    }
+
     pub fn compute_root(&self) -> Result<Hash, SubtreeError> {
         Ok(self.0.compute_root()?)
     }
@@ -229,6 +372,59 @@ impl PtrsSubtree {
     pub fn has_commitments(&self, space: &SLabel) -> Result<bool, SubtreeError> {
         let key: Hash = RegistryKey::from_slabel::<KeyHash>(space).into();
         Ok(self.0.contains(&key)?)
+    }
+
+    pub fn get_latest_commitment_root(&self, space: &SLabel) -> Result<Option<Hash>, SubtreeError> {
+        let key: Hash = RegistryKey::from_slabel::<KeyHash>(space).into();
+
+        // Find the commitment tip entry
+        for (k, value) in self.iter() {
+            if k == key {
+                if let PtrsValue::CommitmentTip(tip_root) = value {
+                    return Ok(Some(tip_root));
+                }
+            }
+        }
+        // Tip not found in proof - check if it provably doesn't exist
+        if self.0.contains(&key)? {
+            // Key exists but we didn't find it in iteration - incomplete proof
+            Err(SubtreeError::IncompleteProof {
+                reason: "commitment tip key present but value missing".to_string(),
+            })
+        } else {
+            // No commitments exist for this space
+            Ok(None)
+        }
+    }
+
+    /// Checks if the given state_root is the latest commitment for the space.
+    ///
+    /// Returns:
+    /// - `Ok(true)` if the commitment tip for this space matches state_root
+    /// - `Ok(false)` if the commitment tip exists but doesn't match
+    /// - `Err` if the tip cannot be proven
+    pub fn is_latest_commitment(&self, space: &SLabel, state_root: Hash) -> Result<bool, SubtreeError> {
+        let key: Hash = RegistryKey::from_slabel::<KeyHash>(space).into();
+
+        // Find the commitment tip entry
+        for (k, value) in self.iter() {
+            if k == key {
+                if let PtrsValue::CommitmentTip(tip_root) = value {
+                    return Ok(tip_root == state_root);
+                }
+            }
+        }
+
+        // Tip not found in proof - check if it provably doesn't exist
+        if self.0.contains(&key)? {
+            // Key exists but we didn't find it in iteration - incomplete proof
+            Err(SubtreeError::IncompleteProof {
+                reason: "commitment tip key present but value missing".to_string(),
+            })
+        } else {
+            // No commitments exist for this space
+            Err(SubtreeError::KeyNotProvable { key })
+        }
     }
 
     /// Finds a PtrOut by its genesis SPK.
@@ -301,6 +497,11 @@ impl Iterator for PtrsIter<'_> {
             // Try PtrOutpointKey → PtrOut
             if let Ok(ptrout) = borsh::from_slice::<PtrOut>(v.as_slice()) {
                 return (*k, PtrsValue::UTXO(ptrout));
+            }
+
+            // Try CommitmentKey → Commitment
+            if let Ok(c) = borsh::from_slice::<Commitment>(v.as_slice()) {
+                return (*k, PtrsValue::Commitment(c));
             }
 
             // Try RegistryKey → Hash (root)
@@ -402,11 +603,12 @@ fn deserialize_subtree<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Sub
         .map_err(|e| D::Error::custom(format!("SubTreeEncoder error: {}", e)))
 }
 
-// Manual Borsh implementations for Certificate, Witness, and LeafKind
+// Manual Borsh implementations for Certificate and CertificateWitness
 // (ScriptBuf doesn't implement Borsh, so we serialize it as bytes)
 
 impl BorshSerialize for Certificate {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        BorshSerialize::serialize(&self.version, writer)?;
         BorshSerialize::serialize(&self.subject, writer)?;
         BorshSerialize::serialize(&self.witness, writer)
     }
@@ -414,25 +616,26 @@ impl BorshSerialize for Certificate {
 
 impl BorshDeserialize for Certificate {
     fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
+        let version = u8::deserialize_reader(reader)?;
         let subject = SName::deserialize_reader(reader)?;
         let witness = Witness::deserialize_reader(reader)?;
-        Ok(Certificate { subject, witness })
+        Ok(Certificate { version, subject, witness })
     }
 }
 
 impl BorshSerialize for Witness {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         match self {
-            Witness::Root { inclusion, ptrs, commitment } => {
+            Witness::Root { receipt, cert_relay } => {
                 BorshSerialize::serialize(&0u8, writer)?;
-                BorshSerialize::serialize(inclusion, writer)?;
-                BorshSerialize::serialize(ptrs, writer)?;
-                BorshSerialize::serialize(commitment, writer)
+                BorshSerialize::serialize(receipt, writer)?;
+                BorshSerialize::serialize(cert_relay, writer)
             }
-            Witness::Leaf { genesis_spk, kind } => {
+            Witness::Leaf { genesis_spk, handles, signature } => {
                 BorshSerialize::serialize(&1u8, writer)?;
                 BorshSerialize::serialize(&genesis_spk.as_bytes().to_vec(), writer)?;
-                BorshSerialize::serialize(kind, writer)
+                BorshSerialize::serialize(handles, writer)?;
+                BorshSerialize::serialize(signature, writer)
             }
         }
     }
@@ -443,64 +646,24 @@ impl BorshDeserialize for Witness {
         let variant = u8::deserialize_reader(reader)?;
         match variant {
             0 => {
-                let inclusion = SpacesSubtree::deserialize_reader(reader)?;
-                let ptrs = Option::<PtrsSubtree>::deserialize_reader(reader)?;
-                let commitment = Option::<Receipt>::deserialize_reader(reader)?;
-                Ok(Witness::Root { inclusion, ptrs, commitment })
+                let receipt = Option::<Receipt>::deserialize_reader(reader)?;
+                let cert_relay = Option::<String>::deserialize_reader(reader)?;
+                Ok(Witness::Root { receipt, cert_relay })
             }
             1 => {
                 let spk_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
                 let genesis_spk = ScriptBuf::from_bytes(spk_bytes);
-                let kind = LeafKind::deserialize_reader(reader)?;
-                Ok(Witness::Leaf { genesis_spk, kind })
+                let handles = HandleSubtree::deserialize_reader(reader)?;
+                let signature = Option::<Signature>::deserialize_reader(reader)?;
+                Ok(Witness::Leaf { genesis_spk, handles, signature })
             }
             _ => Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("invalid Witness variant: {}", variant),
+                format!("invalid CertificateWitness variant: {}", variant),
             )),
         }
     }
 }
-
-impl BorshSerialize for LeafKind {
-    fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        match self {
-            LeafKind::Final { inclusion, key_rotation } => {
-                BorshSerialize::serialize(&0u8, writer)?;
-                BorshSerialize::serialize(inclusion, writer)?;
-                BorshSerialize::serialize(key_rotation, writer)
-            }
-            LeafKind::Temporary { exclusion, signature } => {
-                BorshSerialize::serialize(&1u8, writer)?;
-                BorshSerialize::serialize(exclusion, writer)?;
-                BorshSerialize::serialize(signature, writer)
-            }
-        }
-    }
-}
-
-impl BorshDeserialize for LeafKind {
-    fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
-        let variant = u8::deserialize_reader(reader)?;
-        match variant {
-            0 => {
-                let inclusion = HandleSubtree::deserialize_reader(reader)?;
-                let key_rotation = PtrsSubtree::deserialize_reader(reader)?;
-                Ok(LeafKind::Final { inclusion, key_rotation })
-            }
-            1 => {
-                let exclusion = Option::<HandleSubtree>::deserialize_reader(reader)?;
-                let signature = Signature::deserialize_reader(reader)?;
-                Ok(LeafKind::Temporary { exclusion, signature })
-            }
-            _ => Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("invalid LeafKind variant: {}", variant),
-            )),
-        }
-    }
-}
-
 
 #[derive(Debug, Clone)]
 pub enum SubtreeError {

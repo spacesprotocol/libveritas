@@ -199,6 +199,57 @@ impl SName {
         SNameRef(&self.0)
     }
 
+    /// Creates an SName from a space SLabel (e.g., `@bitcoin` from `SLabel("bitcoin")`).
+    ///
+    /// This is equivalent to `SName::from_str("@bitcoin")` but avoids string allocation.
+    pub fn from_space(space: &SLabel) -> Result<Self, Error> {
+        // SLabel::as_ref() returns DNS wire format: [length_byte, label_bytes...]
+        let space_bytes = space.as_ref();
+
+        if space_bytes.is_empty() {
+            return Err(Error::Empty);
+        }
+        if space_bytes.len() + 1 > MAX_SPACE_LEN {
+            return Err(Error::TooLong);
+        }
+
+        let mut buf = [0u8; MAX_SPACE_LEN];
+        buf[..space_bytes.len()].copy_from_slice(space_bytes);
+        // buf[space_bytes.len()] is already 0 (null terminator)
+
+        Ok(SName(buf))
+    }
+
+    /// Creates an SName by joining a label with a space (e.g., `alice@bitcoin`).
+    ///
+    /// This is equivalent to `SName::from_str("alice@bitcoin")` but avoids string allocation.
+    pub fn join(label: &Label, space: &SLabel) -> Result<Self, Error> {
+        // Both SLabel::as_ref() return DNS wire format: [length_byte, label_bytes...]
+        let label_bytes = label.0.as_ref();
+        let space_bytes = space.as_ref();
+
+        if label_bytes.is_empty() || space_bytes.is_empty() {
+            return Err(Error::Empty);
+        }
+        // Need: label (already length-prefixed) + space (already length-prefixed) + 1 (null)
+        if label_bytes.len() + space_bytes.len() + 1 > MAX_SPACE_LEN {
+            return Err(Error::TooLong);
+        }
+
+        let mut buf = [0u8; MAX_SPACE_LEN];
+        let mut pos = 0;
+
+        // Write label (already length-prefixed)
+        buf[pos..pos + label_bytes.len()].copy_from_slice(label_bytes);
+        pos += label_bytes.len();
+
+        // Write space (already length-prefixed)
+        buf[pos..pos + space_bytes.len()].copy_from_slice(space_bytes);
+        // buf[pos + space_bytes.len()] is already 0 (null terminator)
+
+        Ok(SName(buf))
+    }
+
     /// Returns the top-level space (the label after `@`).
     ///
     /// For `hello.world@bitcoin`, this returns `Some(SLabel("bitcoin"))`.
