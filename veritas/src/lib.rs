@@ -501,6 +501,16 @@ impl Zone {
 
         // Delegate knowledge
         match (&self.delegate, &other.delegate) {
+            (ProvableOption::Exists { value: a }, ProvableOption::Exists { value: b }) => {
+                match (&a.offchain_data, &b.offchain_data) {
+                    (Some(a), Some(b)) => if a.is_better_than(b) {
+                        return Ok(true);
+                    }
+                    (Some(_), None) => return Ok(true),
+                    (None, Some(_)) => return Ok(false),
+                    _ => {}
+                }
+            }
             (ProvableOption::Exists { .. }, ProvableOption::Empty | ProvableOption::Unknown) => return Ok(true),
             (ProvableOption::Empty | ProvableOption::Unknown, ProvableOption::Exists { .. }) => return Ok(false),
             (ProvableOption::Empty, ProvableOption::Unknown) => return Ok(true),
