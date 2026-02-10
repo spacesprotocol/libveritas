@@ -211,7 +211,8 @@ impl FixtureRunner {
             space: self.space.space.label(),
             receipt: None,
             epochs: vec![],
-            cert_relay: None,
+            offchain_data: None,
+            delegate_offchain_data: None,
         };
 
         for c in &mut self.handles.commitments {

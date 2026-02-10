@@ -594,7 +594,8 @@ impl TestHandleTree {
                     tree: HandleSubtree(handles_proof),
                     handles,
                 }],
-                cert_relay: None,
+                offchain_data: None,
+                delegate_offchain_data: None,
             }],
         }
     }
@@ -665,7 +666,8 @@ impl TestHandleTree {
                         signature: Some(staged.signature),
                     }],
                 }],
-                cert_relay: None,
+                offchain_data: None,
+                delegate_offchain_data: None,
             }],
         }
     }

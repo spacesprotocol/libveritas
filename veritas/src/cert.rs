@@ -52,8 +52,6 @@ pub enum Witness {
         /// ZK receipt proving commitment validity. May prove a NEWER commitment
         /// than the certificate's `commitment_root` (recursive coverage).
         receipt: Option<Receipt>,
-        /// Optional URL where clients can fetch full bundles for this space.
-        cert_relay: Option<String>,
     },
     /// Leaf certificate for a delegated handle.
     Leaf {
@@ -110,14 +108,6 @@ impl Certificate {
         match &self.witness {
             Witness::Root { .. } => true,
             Witness::Leaf { signature, .. } => signature.is_none(),
-        }
-    }
-
-    /// Returns the cert relay URL if available.
-    pub fn cert_relay(&self) -> Option<&str> {
-        match &self.witness {
-            Witness::Root { cert_relay, .. } => cert_relay.as_deref(),
-            _ => None,
         }
     }
 
@@ -620,10 +610,9 @@ impl BorshDeserialize for Certificate {
 impl BorshSerialize for Witness {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         match self {
-            Witness::Root { receipt, cert_relay } => {
+            Witness::Root { receipt } => {
                 BorshSerialize::serialize(&0u8, writer)?;
-                BorshSerialize::serialize(receipt, writer)?;
-                BorshSerialize::serialize(cert_relay, writer)
+                BorshSerialize::serialize(receipt, writer)
             }
             Witness::Leaf { genesis_spk, handles, signature } => {
                 BorshSerialize::serialize(&1u8, writer)?;
@@ -641,8 +630,7 @@ impl BorshDeserialize for Witness {
         match variant {
             0 => {
                 let receipt = Option::<Receipt>::deserialize_reader(reader)?;
-                let cert_relay = Option::<String>::deserialize_reader(reader)?;
-                Ok(Witness::Root { receipt, cert_relay })
+                Ok(Witness::Root { receipt })
             }
             1 => {
                 let spk_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;

@@ -49,7 +49,6 @@ impl VerifiedMessage {
                 handle.clone(),
                 Witness::Root {
                     receipt: bundle.receipt.clone(),
-                    cert_relay: bundle.cert_relay.clone(),
                 },
             ));
         }
@@ -142,7 +141,6 @@ impl<'a> Iterator for CertificateIter<'a> {
                     root_handle,
                     Witness::Root {
                         receipt: bundle.receipt.clone(),
-                        cert_relay: bundle.cert_relay.clone(),
                     },
                 ));
             }
@@ -245,6 +243,7 @@ impl CommitmentInfo {
 pub struct Delegate {
     pub script_pubkey: ScriptBuf,
     pub data: Option<Bytes>,
+    pub offchain_data: Option<OffchainData>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -284,7 +283,8 @@ impl BorshDeserialize for SovereigntyState {
 impl BorshSerialize for Delegate {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         BorshSerialize::serialize(&self.script_pubkey.as_bytes().to_vec(), writer)?;
-        BorshSerialize::serialize(&self.data.clone().map(|b| b.to_vec()), writer)
+        BorshSerialize::serialize(&self.data.clone().map(|b| b.to_vec()), writer)?;
+        BorshSerialize::serialize(&self.offchain_data, writer)
     }
 }
 
@@ -292,9 +292,11 @@ impl BorshDeserialize for Delegate {
     fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
         let spk_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
         let data: Option<Vec<u8>> = Option::deserialize_reader(reader)?;
+        let offchain_data = Option::<OffchainData>::deserialize_reader(reader)?;
         Ok(Delegate {
             script_pubkey: ScriptBuf::from_bytes(spk_bytes),
             data: data.map(Bytes::new),
+            offchain_data,
         })
     }
 }
@@ -441,27 +443,6 @@ impl Zone {
         zone.anchor = 0;
         zone.offchain_data = None;
         borsh::to_vec(&zone).expect("zone serialization should not fail")
-    }
-
-    /// Verify the offchain_data signature against the zone's script_pubkey.
-    fn verify_offchain_data(&self) -> Result<(), SignatureError> {
-        let offchain = self.offchain_data.as_ref()
-            .ok_or(SignatureError::InvalidSignature)?;
-
-        let script_bytes = self.script_pubkey.as_bytes();
-        if script_bytes.len() != secp256k1::constants::SCHNORR_PUBLIC_KEY_SIZE + 2 {
-            return Err(SignatureError::InvalidPublicKey);
-        }
-        let pubkey = XOnlyPublicKey::from_slice(&script_bytes[2..])
-            .map_err(|_| SignatureError::InvalidPublicKey)?;
-
-        let msg = hash_signable_message(&offchain.signing_bytes());
-        let sig = secp256k1::schnorr::Signature::from_slice(&offchain.signature.0)
-            .map_err(|_| SignatureError::InvalidSignature)?;
-
-        secp256k1::Secp256k1::verification_only()
-            .verify_schnorr(&sig, &msg, &pubkey)
-            .map_err(|_| SignatureError::VerificationFailed)
     }
 
     /// Verify a schnorr signature over this zone.
@@ -810,7 +791,8 @@ impl Veritas {
                         space,
                         receipt: if receipt_verified { bundle.receipt } else { None },
                         epochs: vec![],
-                        cert_relay: bundle.cert_relay,
+                        offchain_data: bundle.offchain_data,
+                        delegate_offchain_data: bundle.delegate_offchain_data,
                     })
                 } else {
                     None
@@ -894,7 +876,8 @@ impl Veritas {
                 space,
                 receipt: if receipt_verified { bundle.receipt } else { None },
                 epochs: verified_epochs,
-                cert_relay: bundle.cert_relay,
+                offchain_data: bundle.offchain_data,
+                delegate_offchain_data: bundle.delegate_offchain_data,
             })
         } else {
             None
@@ -1015,6 +998,15 @@ impl Veritas {
 
         z.data = space.data().map(|d| Bytes::new(d.to_vec()));
         z.script_pubkey = spaceout.script_pubkey.clone();
+        z.offchain_data = bundle.offchain_data.clone();
+
+        // Verify offchain_data signature if present
+        if let Some(offchain) = &z.offchain_data {
+            offchain.verify(&z.script_pubkey).map_err(|e| MessageError::OffchainDataInvalid {
+                handle: z.handle.to_string(),
+                reason: e.to_string(),
+            })?;
+        }
 
         // Extract delegate info
         if let Ok(delegate) = chain.ptrs.find_sptr(&z.script_pubkey) {
@@ -1022,10 +1014,19 @@ impl Veritas {
                 None => z.delegate = ProvableOption::Empty,
                 Some(delegate) => {
                     if let Some(ptr) = delegate.sptr {
+                        let delegate_offchain = bundle.delegate_offchain_data.clone();
+                        if let Some(offchain) = &delegate_offchain {
+                            offchain.verify(&delegate.script_pubkey)
+                                .map_err(|e| MessageError::OffchainDataInvalid {
+                                    handle: z.handle.to_string(),
+                                    reason: e.to_string(),
+                                })?;
+                        }
                         z.delegate = ProvableOption::Exists {
                             value: Delegate {
                                 script_pubkey: delegate.script_pubkey,
                                 data: ptr.data,
+                                offchain_data: delegate_offchain,
                             },
                         }
                     }
@@ -1104,8 +1105,8 @@ fn verify_temporary_handle(
     })?;
 
     // Verify offchain_data signature if present
-    if zone.offchain_data.is_some() {
-        zone.verify_offchain_data().map_err(|e| MessageError::OffchainDataInvalid {
+    if let Some(offchain) = &zone.offchain_data {
+        offchain.verify(&zone.script_pubkey).map_err(|e| MessageError::OffchainDataInvalid {
             handle: zone.handle.to_string(),
             reason: e.to_string(),
         })?;
@@ -1163,8 +1164,8 @@ fn verify_final_handle(
     };
 
     // Verify offchain_data signature if present
-    if zone.offchain_data.is_some() {
-        zone.verify_offchain_data().map_err(|e| MessageError::OffchainDataInvalid {
+    if let Some(offchain) = &zone.offchain_data {
+        offchain.verify(&zone.script_pubkey).map_err(|e| MessageError::OffchainDataInvalid {
             handle: zone.handle.to_string(),
             reason: e.to_string(),
         })?;
