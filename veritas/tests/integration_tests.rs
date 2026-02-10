@@ -12,7 +12,7 @@ use spaces_protocol::hasher::{KeyHasher, OutpointKey, SpaceKey};
 use spaces_protocol::slabel::SLabel;
 use spaces_protocol::{Covenant, FullSpaceOut, Space, SpaceOut};
 use spaces_ptr::sptr::Sptr;
-use spaces_ptr::{transcript_hash, CommitmentKey, FullPtrOut, Ptr, PtrOut, PtrOutpointKey, RegistryKey, RegistrySptrKey, RootAnchor};
+use spaces_ptr::{rolling_hash, CommitmentKey, FullPtrOut, Ptr, PtrOut, PtrOutpointKey, RegistryKey, RegistrySptrKey, RootAnchor};
 use std::collections::HashMap;
 use std::str::FromStr;
 use risc0_zkvm::{FakeReceipt, InnerReceipt, Receipt, ReceiptClaim};
@@ -259,7 +259,7 @@ impl TestChain {
         let ptrs_root = self.ptrs_tree.compute_root().expect("ptrs root");
 
         let block_hash = BlockHash
-        ::from_byte_array(transcript_hash::<KeyHash>(spaces_root, ptrs_root));
+        ::from_byte_array(rolling_hash::<KeyHash>(spaces_root, ptrs_root));
 
         RootAnchor {
             spaces_root,
@@ -315,13 +315,13 @@ impl TestChain {
             None => spaces_ptr::Commitment {
                 state_root: root,
                 prev_root: None,
-                history_hash: root,
+                rolling_hash: root,
                 block_height: self.block_height,
             },
             Some(prev) => spaces_ptr::Commitment {
                 state_root: root,
                 prev_root: Some(prev.state_root),
-                history_hash: transcript_hash::<KeyHash>(prev.history_hash, root),
+                rolling_hash: rolling_hash::<KeyHash>(prev.rolling_hash, root),
                 block_height: self.block_height,
             }
         };
@@ -479,7 +479,7 @@ impl TestHandleTree {
                 policy_fold: libveritas_methods::FOLD_ID,
                 initial_root,
                 final_root,
-                transcript: onchain_commitment.history_hash,
+                rolling_hash: onchain_commitment.rolling_hash,
                 kind: libveritas_zk::guest::CommitmentKind::Fold,
             };
 

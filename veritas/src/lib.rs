@@ -233,7 +233,7 @@ impl CommitmentInfo {
             onchain: spaces_ptr::Commitment {
                 state_root: empty_root,
                 prev_root: None,
-                history_hash: empty_root,
+                rolling_hash: empty_root,
                 block_height: 0,
             },
             receipt_hash: None,
@@ -1433,8 +1433,8 @@ fn verify_zk_journal_matches_onchain(space: &SLabel, zk: &libveritas_zk::guest::
     if zk.final_root != onchain.state_root {
         return Err(MessageError::CommitmentReceiptMismatch { space: space_str.clone(), field: "state_root" });
     }
-    if zk.transcript != onchain.history_hash {
-        return Err(MessageError::CommitmentReceiptMismatch { space: space_str, field: "history_hash" });
+    if zk.rolling_hash != onchain.rolling_hash {
+        return Err(MessageError::CommitmentReceiptMismatch { space: space_str, field: "rolling_hash" });
     }
     Ok(())
 }
