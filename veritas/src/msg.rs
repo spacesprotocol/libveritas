@@ -1,10 +1,9 @@
 use std::io::{Read, Write};
-
 use borsh::{BorshDeserialize, BorshSerialize};
 use risc0_zkvm::Receipt;
 use serde::{Deserialize, Serialize};
 use spacedb::{NodeHasher, Sha256Hasher};
-use spaces_protocol::bitcoin::ScriptBuf;
+use spaces_protocol::bitcoin::{secp256k1, ScriptBuf};
 use spaces_protocol::constants::ChainAnchor;
 use spaces_protocol::slabel::SLabel;
 
@@ -113,8 +112,10 @@ pub struct Bundle {
     /// should have `tree.compute_root()` matching the receipt's final_root
     /// or the on-chain tip from the chain proof.
     pub epochs: Vec<Epoch>,
-    /// Optional URL where full certificates for this space can be fetched.
-    pub cert_relay: Option<String>,
+    /// Off-chain data signed by the space owner.
+    pub offchain_data: Option<OffchainData>,
+    /// Off-chain data signed by the delegate.
+    pub delegate_offchain_data: Option<OffchainData>,
 }
 
 /// A snapshot of the handle tree at a specific commitment.
@@ -158,6 +159,23 @@ impl OffchainData {
         bytes.extend_from_slice(&self.seq.to_le_bytes());
         bytes.extend_from_slice(&self.data);
         bytes
+    }
+
+    /// Verify the signature against the given script pubkey.
+    pub fn verify(&self, script_pubkey: &ScriptBuf) -> Result<(), crate::SignatureError> {
+        use secp256k1::XOnlyPublicKey;
+        let script_bytes = script_pubkey.as_bytes();
+        if script_bytes.len() != secp256k1::constants::SCHNORR_PUBLIC_KEY_SIZE + 2 {
+            return Err(crate::SignatureError::InvalidPublicKey);
+        }
+        let pubkey = XOnlyPublicKey::from_slice(&script_bytes[2..])
+            .map_err(|_| crate::SignatureError::InvalidPublicKey)?;
+        let msg = crate::hash_signable_message(&self.signing_bytes());
+        let sig = secp256k1::schnorr::Signature::from_slice(&self.signature.0)
+            .map_err(|_| crate::SignatureError::InvalidSignature)?;
+        secp256k1::Secp256k1::verification_only()
+            .verify_schnorr(&sig, &msg, &pubkey)
+            .map_err(|_| crate::SignatureError::VerificationFailed)
     }
 
     pub fn is_better_than(&self, other: &Self) -> bool {
@@ -213,7 +231,8 @@ impl BorshSerialize for Bundle {
         BorshSerialize::serialize(&self.space, writer)?;
         BorshSerialize::serialize(&self.receipt, writer)?;
         BorshSerialize::serialize(&self.epochs, writer)?;
-        BorshSerialize::serialize(&self.cert_relay, writer)
+        BorshSerialize::serialize(&self.offchain_data, writer)?;
+        BorshSerialize::serialize(&self.delegate_offchain_data, writer)
     }
 }
 
@@ -222,8 +241,9 @@ impl BorshDeserialize for Bundle {
         let space = SLabel::deserialize_reader(reader)?;
         let receipt = Option::<Receipt>::deserialize_reader(reader)?;
         let epochs = Vec::<Epoch>::deserialize_reader(reader)?;
-        let cert_relay = Option::<String>::deserialize_reader(reader)?;
-        Ok(Bundle { space, receipt, epochs, cert_relay })
+        let offchain_data = Option::<OffchainData>::deserialize_reader(reader)?;
+        let delegate_offchain_data = Option::<OffchainData>::deserialize_reader(reader)?;
+        Ok(Bundle { space, receipt, epochs, offchain_data, delegate_offchain_data })
     }
 }
 

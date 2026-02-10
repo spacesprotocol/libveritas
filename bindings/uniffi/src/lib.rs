@@ -22,7 +22,7 @@ pub enum VeritasError {
 
 #[derive(uniffi::Enum)]
 pub enum VeritasDelegateState {
-    Exists { script_pubkey: Vec<u8>, data: Option<Vec<u8>> },
+    Exists { script_pubkey: Vec<u8>, data: Option<Vec<u8>>, offchain_data: Option<VeritasOffchainData> },
     Empty,
     Unknown,
 }
@@ -52,7 +52,6 @@ pub struct VeritasOffchainData {
 pub struct VeritasCertificate {
     pub subject: String,
     pub cert_type: String,
-    pub cert_relay: Option<String>,
     pub bytes: Vec<u8>,
 }
 
@@ -69,7 +68,6 @@ fn cert_to_record(c: &libveritas::cert::Certificate) -> VeritasCertificate {
     VeritasCertificate {
         subject: c.subject.to_string(),
         cert_type: cert_type.to_string(),
-        cert_relay: c.cert_relay().map(|s| s.to_string()),
         bytes: c.to_bytes(),
     }
 }
@@ -115,6 +113,10 @@ impl VeritasZone {
             libveritas::ProvableOption::Exists { value } => VeritasDelegateState::Exists {
                 script_pubkey: value.script_pubkey.as_bytes().to_vec(),
                 data: value.data.as_ref().map(|d| d.as_slice().to_vec()),
+                offchain_data: value.offchain_data.as_ref().map(|od| VeritasOffchainData {
+                    seq: od.seq,
+                    data: od.data.clone(),
+                }),
             },
             libveritas::ProvableOption::Empty => VeritasDelegateState::Empty,
             libveritas::ProvableOption::Unknown => VeritasDelegateState::Unknown,
