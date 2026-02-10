@@ -2,7 +2,6 @@ use std::fmt;
 use std::io::{Read, Write};
 use spacedb::{Hash, NodeHasher, Sha256Hasher};
 use spacedb::subtree::{SubTree, SubtreeIter};
-use spacedb::encode::SubTreeEncoder;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use borsh::{BorshDeserialize, BorshSerialize};
@@ -14,8 +13,6 @@ use spaces_protocol::SpaceOut;
 use spaces_ptr::{ChainProofRequest, Commitment, CommitmentKey, PtrKeyKind, PtrOut, RegistryKey};
 use spaces_ptr::sptr::Sptr;
 use crate::sname::{Label, SName};
-
-const SUBTREE_ENCODE_BUFFER_SIZE: usize = 1024 * 100;
 
 /// Current certificate version.
 pub const CERTIFICATE_VERSION: u8 = 2;
@@ -574,11 +571,8 @@ impl<'de> Deserialize<'de> for HandleSubtree {
 
 fn serialize_subtree<S: Serializer>(subtree: &SubTree<Sha256Hasher>, serializer: S) -> Result<S::Ok, S::Error> {
     use serde::ser::Error;
-    let mut buf = vec![0u8; SUBTREE_ENCODE_BUFFER_SIZE];
-    let bytes_written = subtree
-        .write_to_slice(&mut buf)
-        .map_err(|e| S::Error::custom(format!("SubTreeEncoder error: {}", e)))?;
-    buf.truncate(bytes_written);
+    let buf = subtree.to_vec()
+        .map_err(|e| S::Error::custom(format!("SubTree encode error: {}", e)))?;
 
     if serializer.is_human_readable() {
         let encoded = BASE64.encode(&buf);

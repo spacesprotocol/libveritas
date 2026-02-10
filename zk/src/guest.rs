@@ -12,7 +12,7 @@ pub struct Commitment {
     pub policy_fold: [u32; 8],
     pub initial_root: Hash,
     pub final_root: Hash,
-    pub transcript: Hash,
+    pub rolling_hash: Hash,
     pub kind: CommitmentKind,
 }
 
@@ -63,7 +63,7 @@ pub fn run(subtree: Vec<u8>, input: Vec<u8>, policy_step: [u32; 8], policy_fold:
         space: reader.space_hash().try_into().expect("space hash error"),
         initial_root,
         final_root,
-        transcript: {
+        rolling_hash: {
             let mut msg = [0u8; 64];
             msg[..32].copy_from_slice(&initial_root);
             msg[32..].copy_from_slice(&final_root);

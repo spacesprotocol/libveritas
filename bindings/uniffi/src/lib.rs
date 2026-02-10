@@ -32,7 +32,7 @@ pub enum VeritasCommitmentState {
     Exists {
         state_root: Vec<u8>,
         prev_root: Option<Vec<u8>>,
-        history_hash: Vec<u8>,
+        rolling_hash: Vec<u8>,
         block_height: u32,
         receipt_hash: Option<Vec<u8>>,
     },
@@ -126,7 +126,7 @@ impl VeritasZone {
             libveritas::ProvableOption::Exists { value } => VeritasCommitmentState::Exists {
                 state_root: value.onchain.state_root.to_vec(),
                 prev_root: value.onchain.prev_root.map(|r| r.to_vec()),
-                history_hash: value.onchain.history_hash.to_vec(),
+                rolling_hash: value.onchain.rolling_hash.to_vec(),
                 block_height: value.onchain.block_height,
                 receipt_hash: value.receipt_hash.as_ref().map(|h| h.to_vec()),
             },
