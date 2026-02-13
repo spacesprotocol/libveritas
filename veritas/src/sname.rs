@@ -4,58 +4,20 @@ use std::str::FromStr;
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::{Error as DeError, SeqAccess, Visitor};
-use spaces_protocol::slabel::SLabel;
+use spaces_protocol::slabel::{SLabel, SLabelRef};
 
-/// Maximum length of a space name in bytes.
 pub const MAX_SPACE_LEN: usize = 255;
-
-/// Maximum length of a single label in bytes.
-pub const MAX_LABEL_LEN: usize = 63;
+pub const MAX_LABEL_LEN: usize = 62;
 
 /// A DNS-encoded name representing a space handle.
 ///
-/// An `SName` stores a hierarchical name using DNS wire format encoding, where each label
-/// is prefixed by its length byte and the name is terminated by a null byte.
-///
-/// # Display Format
-///
-/// When displayed as a string, an `SName` uses the format `labels@space` where:
-/// - The **space** (root) appears after the `@` symbol with no dots following it
-/// - **Subspace labels** appear before the `@`, separated by dots
-///
-/// For example, `hello.world@bitcoin` represents:
-/// - `bitcoin` - the space (root label)
-/// - `world` - a subspace of `bitcoin`
-/// - `hello` - a label within `world`
-///
-/// # Wire Format
-///
-/// Internally, labels are stored in order with length prefixes:
-/// ```text
-/// \x05hello\x05world\x07bitcoin\x00
-///   ^5 bytes  ^5 bytes  ^7 bytes  ^null terminator
-/// ```
-///
-/// # Examples
-///
-/// ```ignore
-/// use std::str::FromStr;
-///
-/// // Parse from display format
-/// let name = SName::from_str("alice@bitcoin").unwrap();
-/// assert_eq!(name.to_string(), "alice@bitcoin");
-///
-/// // Multi-level subspace
-/// let name = SName::from_str("key.wallet@bitcoin").unwrap();
-/// assert_eq!(name.to_string(), "key.wallet@bitcoin");
-/// ```
+/// Wire format: length-prefixed labels terminated by a null byte.
+/// Display format: `labels@space` (e.g., `alice@bitcoin`, `key.wallet@bitcoin`).
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SName([u8; MAX_SPACE_LEN]);
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Label(SLabel);
-
-// Borsh implementations for SName and Label
 
 impl BorshSerialize for SName {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
@@ -72,7 +34,6 @@ impl BorshDeserialize for SName {
 
 impl BorshSerialize for Label {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        // Serialize as the raw bytes of the SLabel
         BorshSerialize::serialize(&self.0.as_ref().to_vec(), writer)
     }
 }
@@ -99,23 +60,14 @@ impl Display for Label {
     }
 }
 
-
-/// Error type for space name parsing and validation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
-    /// Name is empty.
     Empty,
-    /// Name exceeds maximum length of 255 bytes.
     TooLong,
-    /// Label exceeds maximum length of 63 bytes.
     LabelTooLong,
-    /// Missing null terminator in wire format.
     MissingNullTerminator,
-    /// Invalid label length byte in wire format.
     InvalidLabelLength,
-    /// Name contains invalid characters (must be lowercase alphanumeric).
     InvalidCharacter,
-    /// Malformed name.
     Malformed,
 }
 
@@ -127,7 +79,7 @@ impl Display for Error {
             Error::LabelTooLong => write!(f, "label exceeds maximum length of {} bytes", MAX_LABEL_LEN),
             Error::MissingNullTerminator => write!(f, "missing null terminator"),
             Error::InvalidLabelLength => write!(f, "invalid label length byte"),
-            Error::InvalidCharacter => write!(f, "invalid character (must be lowercase alphanumeric)"),
+            Error::InvalidCharacter => write!(f, "invalid character"),
             Error::Malformed => write!(f, "malformed name structure"),
         }
     }
@@ -135,35 +87,28 @@ impl Display for Error {
 
 impl std::error::Error for Error {}
 
-/// A borrowed reference to a space name.
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SNameRef<'a>(pub &'a [u8]);
 
-/// Iterator over the labels in a space name.
 pub struct LabelIterator<'a>(&'a [u8]);
 
-/// Trait for types that behave like space names.
 pub trait NameLike {
-    /// Returns the underlying byte representation.
     fn inner_bytes(&self) -> &[u8];
 
-    /// Returns the wire-format bytes including the null terminator.
     fn to_bytes(&self) -> &[u8] {
         let mut len = 0;
         for label in self.iter() {
             len += label.len() + 1;
         }
-        len += 1; // null byte
+        len += 1;
         &self.inner_bytes()[..len]
     }
 
-    /// Returns `true` if this name has exactly one label.
     #[inline(always)]
     fn is_single_label(&self) -> bool {
         self.label_count() == 1
     }
 
-    /// Returns the number of labels in this name.
     fn label_count(&self) -> usize {
         let mut count = 0;
         let mut slice = &self.inner_bytes()[..];
@@ -174,7 +119,6 @@ pub trait NameLike {
         count
     }
 
-    /// Returns an iterator over the labels in this name.
     #[inline(always)]
     fn iter(&self) -> LabelIterator<'_> {
         LabelIterator(&self.inner_bytes()[..])
@@ -194,18 +138,12 @@ impl NameLike for SNameRef<'_> {
 }
 
 impl SName {
-    /// Returns a borrowed reference to this name.
     pub fn as_name_ref(&self) -> SNameRef<'_> {
         SNameRef(&self.0)
     }
 
-    /// Creates an SName from a space SLabel (e.g., `@bitcoin` from `SLabel("bitcoin")`).
-    ///
-    /// This is equivalent to `SName::from_str("@bitcoin")` but avoids string allocation.
     pub fn from_space(space: &SLabel) -> Result<Self, Error> {
-        // SLabel::as_ref() returns DNS wire format: [length_byte, label_bytes...]
         let space_bytes = space.as_ref();
-
         if space_bytes.is_empty() {
             return Err(Error::Empty);
         }
@@ -215,45 +153,29 @@ impl SName {
 
         let mut buf = [0u8; MAX_SPACE_LEN];
         buf[..space_bytes.len()].copy_from_slice(space_bytes);
-        // buf[space_bytes.len()] is already 0 (null terminator)
-
         Ok(SName(buf))
     }
 
-    /// Creates an SName by joining a label with a space (e.g., `alice@bitcoin`).
-    ///
-    /// This is equivalent to `SName::from_str("alice@bitcoin")` but avoids string allocation.
     pub fn join(label: &Label, space: &SLabel) -> Result<Self, Error> {
-        // Both SLabel::as_ref() return DNS wire format: [length_byte, label_bytes...]
         let label_bytes = label.0.as_ref();
         let space_bytes = space.as_ref();
 
         if label_bytes.is_empty() || space_bytes.is_empty() {
             return Err(Error::Empty);
         }
-        // Need: label (already length-prefixed) + space (already length-prefixed) + 1 (null)
         if label_bytes.len() + space_bytes.len() + 1 > MAX_SPACE_LEN {
             return Err(Error::TooLong);
         }
 
         let mut buf = [0u8; MAX_SPACE_LEN];
         let mut pos = 0;
-
-        // Write label (already length-prefixed)
         buf[pos..pos + label_bytes.len()].copy_from_slice(label_bytes);
         pos += label_bytes.len();
-
-        // Write space (already length-prefixed)
         buf[pos..pos + space_bytes.len()].copy_from_slice(space_bytes);
-        // buf[pos + space_bytes.len()] is already 0 (null terminator)
-
         Ok(SName(buf))
     }
 
-    /// Returns the top-level space (the label after `@`).
-    ///
-    /// For `hello.world@bitcoin`, this returns `Some(SLabel("bitcoin"))`.
-    /// Returns `None` if the name has no labels.
+    /// Returns the top-level space label (e.g., `@bitcoin` from `alice@bitcoin`).
     pub fn space(&self) -> Option<SLabel> {
         let labels: Vec<&[u8]> = self.iter().collect();
         let last = labels.last()?;
@@ -261,10 +183,7 @@ impl SName {
         SLabel::from_str_unprefixed(s).ok()
     }
 
-    /// Returns the subspace (the second-level label, immediately before the space).
-    ///
-    /// For `hello.world@bitcoin`, this returns `Some(Label("world"))`.
-    /// Returns `None` if the name has fewer than two labels.
+    /// Returns the subspace label (e.g., `alice` from `alice@bitcoin`).
     pub fn subspace(&self) -> Option<Label> {
         let labels: Vec<&[u8]> = self.iter().collect();
         if labels.len() < 2 {
@@ -278,15 +197,12 @@ impl SName {
 }
 
 impl SNameRef<'_> {
-    /// Creates an owned copy of this name reference.
     pub fn to_owned(&self) -> SName {
         let mut owned = SName([0; MAX_SPACE_LEN]);
         owned.0[..self.0.len()].copy_from_slice(self.0);
         owned
     }
 }
-
-// Display implementations
 
 impl Display for SName {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -306,8 +222,6 @@ impl Display for SNameRef<'_> {
         write!(f, "{}", self)
     }
 }
-
-// FromStr and TryFrom implementations
 
 impl FromStr for SName {
     type Err = Error;
@@ -334,41 +248,23 @@ impl TryFrom<&str> for SName {
 
         for label in subspace.split('.').chain(std::iter::once(space)) {
             if space_len == 0 && label.is_empty() {
-                continue; // Skip initial subspace label if empty
+                continue;
             }
 
-            let label_bytes = label.as_bytes();
-            let label_len = label_bytes.len();
+            let slabel = SLabel::from_str_unprefixed(label)
+                .map_err(|_| Error::InvalidCharacter)?;
+            let slabel_bytes = slabel.as_ref();
+            let slabel_len = slabel_bytes.len();
 
-            if label_len == 0 {
-                return Err(Error::Malformed);
-            }
-            if label_len > MAX_LABEL_LEN {
-                return Err(Error::LabelTooLong);
-            }
-            if space_len + label_len + 2 > MAX_SPACE_LEN {
+            if space_len + slabel_len + 1 > MAX_SPACE_LEN {
                 return Err(Error::TooLong);
             }
 
-            if label
-                .bytes()
-                .any(|b| !b.is_ascii_alphanumeric() || b.is_ascii_uppercase())
-            {
-                return Err(Error::InvalidCharacter);
-            }
-
-            // Insert the length of the label before the label itself
-            space_bytes[space_len] = label_len as u8;
-            space_len += 1;
-
-            // Copy the label into the space_bytes array
-            space_bytes[space_len..space_len + label_len].copy_from_slice(label_bytes);
-            space_len += label_len;
+            space_bytes[space_len..space_len + slabel_len].copy_from_slice(slabel_bytes);
+            space_len += slabel_len;
         }
 
-        // Mark end with null byte
         space_bytes[space_len] = 0;
-
         Ok(SName(space_bytes))
     }
 }
@@ -434,6 +330,8 @@ impl<'a> TryFrom<&'a [u8]> for SNameRef<'a> {
             if label_len + 1 > remaining.len() {
                 return Err(Error::InvalidLabelLength);
             }
+            SLabelRef::try_from(&remaining[..label_len + 1])
+                .map_err(|_| Error::InvalidCharacter)?;
             remaining = &remaining[label_len + 1..];
             parsed_len += label_len + 1;
         }
@@ -441,8 +339,6 @@ impl<'a> TryFrom<&'a [u8]> for SNameRef<'a> {
         Ok(SNameRef(&value[..parsed_len]))
     }
 }
-
-// Iterator implementation
 
 impl<'a> Iterator for LabelIterator<'a> {
     type Item = &'a [u8];
@@ -458,8 +354,6 @@ impl<'a> Iterator for LabelIterator<'a> {
         Some(&label[1..])
     }
 }
-
-// Serde implementations
 
 impl Serialize for SName {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -516,7 +410,6 @@ impl<'de> Deserialize<'de> for SName {
     }
 }
 
-
 impl FromStr for Label {
     type Err = &'static str;
 
@@ -555,84 +448,47 @@ impl<'de> Deserialize<'de> for Label {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_from_slice() {
-        assert!(SName::try_from(b"").is_err(), "Should fail on empty slice");
+        assert!(SName::try_from(b"").is_err());
+        assert!(SName::try_from(b"\x00").is_ok());
+        assert_eq!(SName::try_from(b"\x00").unwrap().label_count(), 0);
 
-        assert!(
-            SName::try_from(b"\x00").is_ok(),
-            "Should succeed on root domain (empty space)"
-        );
+        assert!(SName::try_from(b"\x03bob").is_err(), "missing null byte");
+        assert!(SName::try_from(b"\x03bob\x00").is_ok());
+        assert_eq!(SName::try_from(b"\x03bob\x00").unwrap().label_count(), 1);
+
+        assert!(SName::try_from(b"\x03bob\x07bitcoin\x00").is_ok());
         assert_eq!(
-            SName::try_from(b"\x00").unwrap().label_count(),
-            0,
-            "Root domain should have 0 labels"
-        );
-
-        assert!(
-            SName::try_from(b"\x03bob").is_err(),
-            "Should fail on missing null byte"
-        );
-
-        assert!(
-            SName::try_from(b"\x03bob\x00").is_ok(),
-            "Should succeed on single label"
-        );
-        assert_eq!(
-            SName::try_from(b"\x03bob\x00").unwrap().label_count(),
-            1,
-            "Should count single label"
-        );
-
-        assert!(
-            SName::try_from(b"\x03bob\x07bitcoin\x00").is_ok(),
-            "Should succeed on two labels"
-        );
-        assert_eq!(
-            SName::try_from(b"\x03bob\x07bitcoin\x00")
-                .unwrap()
-                .label_count(),
+            SName::try_from(b"\x03bob\x07bitcoin\x00").unwrap().label_count(),
             2,
-            "Should count two labels"
         );
 
-        let mut max_label = vec![0x3f]; // Length byte for 63 characters
-        max_label.extend_from_slice(&vec![b'a'; 63]); // 63 'a's
-        max_label.push(0x00); // Null byte
-        assert!(
-            SName::try_from(&max_label).is_ok(),
-            "Should succeed on max length label"
-        );
+        // Max label length (62 bytes)
+        let mut max_label = vec![0x3e];
+        max_label.extend_from_slice(&vec![b'a'; 62]);
+        max_label.push(0x00);
+        assert!(SName::try_from(&max_label).is_ok());
 
-        assert!(
-            SName::try_from(b"\x03bob\x00\x03foo").is_ok(),
-            "Should stop parsing at null byte"
-        );
+        // Exceeds max label length (63 bytes)
+        let mut too_long_label = vec![0x3f];
+        too_long_label.extend_from_slice(&vec![b'a'; 63]);
+        too_long_label.push(0x00);
+        assert!(SName::try_from(&too_long_label).is_err());
+
+        // Stops parsing at null byte
+        assert!(SName::try_from(b"\x03bob\x00\x03foo").is_ok());
         assert_eq!(
-            SName::try_from(b"\x03bob\x00\x03foo")
-                .unwrap()
-                .label_count(),
+            SName::try_from(b"\x03bob\x00\x03foo").unwrap().label_count(),
             1,
-            "Should parse up to first null byte"
         );
 
-        let mut long_label = vec![0x40]; // Length byte for 64 characters
-        long_label.extend_from_slice(&vec![b'b'; 64]); // 64 'b's
-        long_label.push(0x00); // Null byte
-        assert!(
-            SName::try_from(&long_label).is_err(),
-            "Should fail on label too long"
-        );
-
-        assert!(
-            SName::try_from(b"\x03bob\x04foo\x00").is_err(),
-            "Should fail on incorrect label length byte"
-        );
+        // Incorrect label length byte
+        assert!(SName::try_from(b"\x03bob\x04foo\x00").is_err());
     }
 
     #[test]
@@ -646,35 +502,17 @@ mod tests {
 
     #[test]
     fn test_from_string() {
-        assert!(SName::from_str("").is_err(), "Should fail on empty string");
-        assert!(
-            SName::from_str("bitcoin").is_err(),
-            "Should fail on missing @"
-        );
-        assert!(
-            SName::from_str("@").is_err(),
-            "Should fail on missing subspace"
-        );
-        assert!(
-            SName::from_str("hey..bob@bitcoin").is_err(),
-            "Should fail on empty label"
-        );
+        assert!(SName::from_str("").is_err());
+        assert!(SName::from_str("bitcoin").is_err());
+        assert!(SName::from_str("@").is_err());
+        assert!(SName::from_str("hey..bob@bitcoin").is_err());
 
-        assert!(
-            SName::from_str("@bitcoin").is_ok(),
-            "Should succeed on single label"
-        );
-        assert!(
-            SName::from_str("bob@bitcoin").is_ok(),
-            "Should succeed on two label"
-        );
-        assert!(
-            SName::from_str("hello.bob@bitcoin").is_ok(),
-            "Should succeed on multi labels"
-        );
+        assert!(SName::from_str("@bitcoin").is_ok());
+        assert!(SName::from_str("bob@bitcoin").is_ok());
+        assert!(SName::from_str("hello.bob@bitcoin").is_ok());
 
         let example = SName::from_str("hello.bob@bitcoin").unwrap();
-        assert_eq!(example.label_count(), 3, "Should count three labels");
+        assert_eq!(example.label_count(), 3);
         let mut iter = example.iter();
         assert_eq!(iter.next(), Some(b"hello" as &[u8]));
         assert_eq!(iter.next(), Some(b"bob" as &[u8]));
@@ -684,5 +522,93 @@ mod tests {
             example.to_bytes(),
             b"\x05hello\x03bob\x07bitcoin\x00" as &[u8]
         );
+    }
+
+    #[test]
+    fn test_hyphens_from_string() {
+        assert!(SName::from_str("@my-space").is_ok());
+        assert!(SName::from_str("my-handle@bitcoin").is_ok());
+        assert!(SName::from_str("a-b-c@my-space").is_ok());
+
+        assert!(SName::from_str("@-bitcoin").is_err());
+        assert!(SName::from_str("@bitcoin-").is_err());
+        assert!(SName::from_str("-alice@bitcoin").is_err());
+        assert!(SName::from_str("alice-@bitcoin").is_err());
+
+        assert!(SName::from_str("@bit--coin").is_err());
+        assert!(SName::from_str("al--ice@bitcoin").is_err());
+    }
+
+    #[test]
+    fn test_hyphens_from_bytes() {
+        assert!(SName::try_from(b"\x09my-handle\x07bitcoin\x00" as &[u8]).is_ok());
+        assert!(SName::try_from(b"\x04-bob\x00" as &[u8]).is_err());
+        assert!(SName::try_from(b"\x04bob-\x00" as &[u8]).is_err());
+        assert!(SName::try_from(b"\x05b--ob\x00" as &[u8]).is_err());
+    }
+
+    #[test]
+    fn test_invalid_characters() {
+        assert!(SName::from_str("@Bitcoin").is_err());
+        assert!(SName::from_str("Alice@bitcoin").is_err());
+        assert!(SName::from_str("@bit_coin").is_err());
+        assert!(SName::from_str("al!ce@bitcoin").is_err());
+        assert!(SName::from_str("@bit coin").is_err());
+        assert!(SName::try_from(b"\x03Bob\x00" as &[u8]).is_err());
+    }
+
+    #[test]
+    fn test_numeric_labels() {
+        assert!(SName::from_str("@123").is_ok());
+        assert!(SName::from_str("456@123").is_ok());
+        assert!(SName::from_str("a1b2@c3d4").is_ok());
+    }
+
+    #[test]
+    fn test_punycode() {
+        assert!(SName::from_str("@xn--y9jia").is_ok());
+        assert!(SName::from_str("alice@xn--y9jia").is_ok());
+        assert!(SName::from_str("xn--y9jia@bitcoin").is_ok());
+        assert!(SName::from_str("@xn--").is_err());
+        assert!(SName::from_str("@ab--cd").is_err());
+        assert!(SName::try_from(b"\x09xn--y9jia\x00" as &[u8]).is_ok());
+    }
+
+    #[test]
+    fn test_space_and_subspace() {
+        let name = SName::from_str("alice@bitcoin").unwrap();
+        assert_eq!(name.space().unwrap().to_string(), "@bitcoin");
+        assert_eq!(name.subspace().unwrap().to_string(), "alice");
+
+        let root = SName::from_str("@bitcoin").unwrap();
+        assert_eq!(root.space().unwrap().to_string(), "@bitcoin");
+        assert!(root.subspace().is_none());
+
+        let deep = SName::from_str("key.wallet@bitcoin").unwrap();
+        assert_eq!(deep.space().unwrap().to_string(), "@bitcoin");
+        assert_eq!(deep.subspace().unwrap().to_string(), "wallet");
+    }
+
+    #[test]
+    fn test_roundtrip_string() {
+        let names = &[
+            "@bitcoin",
+            "alice@bitcoin",
+            "hello.world@bitcoin",
+            "@my-space",
+            "my-handle@my-space",
+        ];
+        for &name in names {
+            let parsed = SName::from_str(name).unwrap();
+            assert_eq!(parsed.to_string(), name);
+        }
+    }
+
+    #[test]
+    fn test_roundtrip_bytes() {
+        let name = SName::from_str("alice@bitcoin").unwrap();
+        let bytes = name.to_bytes();
+        let restored = SName::try_from(bytes).unwrap();
+        assert_eq!(name, restored);
     }
 }
