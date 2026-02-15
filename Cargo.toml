@@ -6,4 +6,4 @@ members = ["methods", "zk", "veritas", "testutil", "bindings/wasm", "bindings/un
 spaces_protocol = { git = "https://github.com/spacesprotocol/spaces.git", branch = "subspaces", features = ["std"] }
 spaces_ptr = { git = "https://github.com/spacesprotocol/spaces.git", branch = "subspaces",  features = ["std"] }
 borsh_utils = { git = "https://github.com/spacesprotocol/spaces.git", branch = "subspaces" }
-spacedb = { git = "https://github.com/spacesprotocol/spacedb.git", version = "0.0.10", default-features = false, features = ["extras"] }
+spacedb = { git = "https://github.com/spacesprotocol/spacedb.git", version = "0.0.11", default-features = false, features = ["extras"] }
