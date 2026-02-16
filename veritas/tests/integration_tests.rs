@@ -724,9 +724,9 @@ impl Fixture {
 
     fn veritas(&self) -> Veritas {
         let anchors = vec![self.latest_anchor.clone(), self.finalized_anchor.clone()];
-        let mut v = Veritas::from_anchors(anchors).expect("valid anchors");
-        v.set_dev_mode(true);
-        v
+        Veritas::new()
+            .with_anchors(anchors).expect("valid anchors")
+            .with_dev_mode(true)
     }
 
     /// Message proving commitment 0 (finalized) against the finalized anchor.

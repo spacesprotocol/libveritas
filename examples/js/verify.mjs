@@ -6,8 +6,7 @@ const anchors = JSON.parse(readFileSync("examples/fixture/anchors.json", "utf8")
 const msg = readFileSync("examples/fixture/message.bin");
 
 // Create verifier
-const veritas = new Veritas(anchors);
-veritas.set_dev_mode(true);
+const veritas = new Veritas(anchors, true);
 console.log(`anchors: ${veritas.oldest_anchor()} .. ${veritas.newest_anchor()}`);
 
 // Build query context (empty = verify all handles)

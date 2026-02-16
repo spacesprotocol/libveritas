@@ -167,9 +167,9 @@ impl ChainState {
             anchors.push(self.chain.current_root_anchor());
         }
         anchors.reverse();
-        let mut v = Veritas::from_anchors(anchors).expect("valid anchors");
-        v.set_dev_mode(true);
-        v
+        Veritas::new()
+            .with_anchors(anchors).expect("valid anchors")
+            .with_dev_mode(true)
     }
 
     pub fn message(&self, bundles: Vec<Bundle>) -> msg::Message {

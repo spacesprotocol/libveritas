@@ -734,7 +734,7 @@ impl TestHandleTree {
 // ─────────────────────────────────────────────────────────────────────────────
 
 pub fn veritas_from_anchors(anchors: Vec<RootAnchor>) -> Veritas {
-    let mut v = Veritas::from_anchors(anchors).expect("valid anchors");
-    v.set_dev_mode(true);
-    v
+    Veritas::new()
+        .with_anchors(anchors).expect("valid anchors")
+        .with_dev_mode(true)
 }

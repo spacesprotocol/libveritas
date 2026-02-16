@@ -90,24 +90,14 @@ pub struct Veritas {
 #[wasm_bindgen]
 impl Veritas {
     #[wasm_bindgen(constructor)]
-    pub fn new(anchors: JsValue) -> Result<Veritas, JsError> {
+    pub fn new(anchors: JsValue, dev_mode: bool) -> Result<Veritas, JsError> {
         let anchors: Vec<RootAnchor> = serde_wasm_bindgen::from_value(anchors)
             .map_err(|e| JsError::new(&format!("invalid anchors: {e}")))?;
-        let inner =
-            libveritas::Veritas::from_anchors(anchors).map_err(|e| JsError::new(&e.to_string()))?;
+        let inner = libveritas::Veritas::new()
+            .with_anchors(anchors)
+            .map_err(|e| JsError::new(&e.to_string()))?
+            .with_dev_mode(dev_mode);
         Ok(Veritas { inner })
-    }
-
-    pub fn update(&mut self, anchors: JsValue) -> Result<(), JsError> {
-        let anchors: Vec<RootAnchor> = serde_wasm_bindgen::from_value(anchors)
-            .map_err(|e| JsError::new(&format!("invalid anchors: {e}")))?;
-        self.inner
-            .update(anchors)
-            .map_err(|e| JsError::new(&e.to_string()))
-    }
-
-    pub fn set_dev_mode(&mut self, enabled: bool) {
-        self.inner.set_dev_mode(enabled);
     }
 
     pub fn oldest_anchor(&self) -> u32 {
