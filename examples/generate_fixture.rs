@@ -34,7 +34,7 @@ fn main() {
     println!("wrote anchors.json ({} anchors)", anchors.len());
 
     // Message as borsh
-    let msg_bytes = borsh::to_vec(&msg).unwrap();
+    let msg_bytes = msg.to_bytes();
     fs::write(dir.join("message.bin"), &msg_bytes).unwrap();
     println!("wrote message.bin ({} bytes)", msg_bytes.len());
 

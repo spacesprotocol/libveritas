@@ -39,7 +39,7 @@ impl QueryContext {
 
     /// Add a known zone from stored bytes (from a previous verification).
     pub fn add_zone(&mut self, zone_bytes: &[u8]) -> Result<(), JsError> {
-        let zone: Zone = borsh::from_slice(zone_bytes)
+        let zone = Zone::from_slice(zone_bytes)
             .map_err(|e| JsError::new(&format!("invalid zone: {e}")))?;
         self.inner.add_zone(zone);
         Ok(())
@@ -132,8 +132,8 @@ impl Veritas {
         ctx: &QueryContext,
         msg: &[u8],
     ) -> Result<VerifiedMessage, JsError> {
-        let msg: Message =
-            borsh::from_slice(msg).map_err(|e| JsError::new(&format!("invalid message: {e}")))?;
+        let msg = Message::from_slice(msg)
+            .map_err(|e| JsError::new(&format!("invalid message: {e}")))?;
 
         let inner = self
             .inner
@@ -214,15 +214,15 @@ pub fn verify_schnorr(msg_hash: &[u8], signature: &[u8], pubkey: &[u8]) -> Resul
 /// Decode stored zone bytes to a VeritasZone object.
 #[wasm_bindgen]
 pub fn decode_zone(bytes: &[u8]) -> Result<VeritasZone, JsError> {
-    let zone: Zone =
-        borsh::from_slice(bytes).map_err(|e| JsError::new(&format!("invalid zone: {e}")))?;
+    let zone = Zone::from_slice(bytes)
+        .map_err(|e| JsError::new(&format!("invalid zone: {e}")))?;
     Ok(VeritasZone { inner: zone })
 }
 
 /// Decode stored certificate bytes to a JS object.
 #[wasm_bindgen]
 pub fn decode_certificate(bytes: &[u8]) -> Result<JsValue, JsError> {
-    let cert: libveritas::cert::Certificate =
-        borsh::from_slice(bytes).map_err(|e| JsError::new(&format!("invalid certificate: {e}")))?;
+    let cert = libveritas::cert::Certificate::from_slice(bytes)
+        .map_err(|e| JsError::new(&format!("invalid certificate: {e}")))?;
     to_js(&cert)
 }
