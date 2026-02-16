@@ -184,7 +184,7 @@ impl VeritasQueryContext {
 
     /// Add a known zone from stored bytes (from a previous verification).
     pub fn add_zone(&self, zone_bytes: Vec<u8>) -> Result<(), VeritasError> {
-        let zone: Zone = borsh::from_slice(&zone_bytes).map_err(|e| VeritasError::InvalidInput {
+        let zone = Zone::from_slice(&zone_bytes).map_err(|e| VeritasError::InvalidInput {
             message: format!("invalid zone: {e}"),
         })?;
         self.inner.write().unwrap().add_zone(zone);
@@ -249,7 +249,7 @@ impl Veritas {
         msg: Vec<u8>,
     ) -> Result<Arc<VerifiedMessage>, VeritasError> {
         let ctx_guard = ctx.inner.read().unwrap();
-        let msg: Message = borsh::from_slice(&msg).map_err(|e| VeritasError::InvalidInput {
+        let msg = Message::from_slice(&msg).map_err(|e| VeritasError::InvalidInput {
             message: format!("invalid message: {e}"),
         })?;
 
@@ -349,8 +349,8 @@ pub fn verify_schnorr(msg_hash: Vec<u8>, signature: Vec<u8>, pubkey: Vec<u8>) ->
 /// Decode stored zone bytes to JSON.
 #[uniffi::export]
 pub fn decode_zone(bytes: Vec<u8>) -> Result<String, VeritasError> {
-    let zone: Zone =
-        borsh::from_slice(&bytes).map_err(|e| VeritasError::InvalidInput {
+    let zone = Zone::from_slice(&bytes)
+        .map_err(|e| VeritasError::InvalidInput {
             message: format!("invalid zone: {e}"),
         })?;
     serde_json::to_string(&zone).map_err(|e| VeritasError::InvalidInput {
@@ -361,8 +361,8 @@ pub fn decode_zone(bytes: Vec<u8>) -> Result<String, VeritasError> {
 /// Decode stored certificate bytes to JSON.
 #[uniffi::export]
 pub fn decode_certificate(bytes: Vec<u8>) -> Result<String, VeritasError> {
-    let cert: libveritas::cert::Certificate =
-        borsh::from_slice(&bytes).map_err(|e| VeritasError::InvalidInput {
+    let cert = libveritas::cert::Certificate::from_slice(&bytes)
+        .map_err(|e| VeritasError::InvalidInput {
             message: format!("invalid certificate: {e}"),
         })?;
     serde_json::to_string(&cert).map_err(|e| VeritasError::InvalidInput {

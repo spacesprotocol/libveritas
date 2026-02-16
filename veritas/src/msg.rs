@@ -89,6 +89,16 @@ pub struct Message {
     pub spaces: Vec<Bundle>,
 }
 
+impl Message {
+    pub fn from_slice(bytes: &[u8]) -> Result<Self, std::io::Error> {
+        borsh::from_slice(bytes)
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        borsh::to_vec(self).expect("message serialization should not fail")
+    }
+}
+
 /// On-chain merkle proofs shared across all spaces in the message.
 #[derive(Clone)]
 pub struct ChainProof {
@@ -118,6 +128,16 @@ pub struct Bundle {
     pub delegate_offchain_data: Option<OffchainData>,
 }
 
+impl Bundle {
+    pub fn from_slice(bytes: &[u8]) -> Result<Self, std::io::Error> {
+        borsh::from_slice(bytes)
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        borsh::to_vec(self).expect("bundle serialization should not fail")
+    }
+}
+
 /// A snapshot of the handle tree at a specific commitment.
 ///
 /// The epoch's root is derived via `tree.compute_root()` and verified
@@ -145,6 +165,16 @@ pub struct Handle {
     pub signature: Option<Signature>,
 }
 
+impl Handle {
+    pub fn from_slice(bytes: &[u8]) -> Result<Self, std::io::Error> {
+        borsh::from_slice(bytes)
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        borsh::to_vec(self).expect("handle serialization should not fail")
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct OffchainData {
     pub seq: u32,
@@ -153,6 +183,14 @@ pub struct OffchainData {
 }
 
 impl OffchainData {
+    pub fn from_slice(bytes: &[u8]) -> Result<Self, std::io::Error> {
+        borsh::from_slice(bytes)
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        borsh::to_vec(self).expect("offchain data serialization should not fail")
+    }
+
     /// Returns the bytes to sign: seq || data
     pub fn signing_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(4 + self.data.len());
