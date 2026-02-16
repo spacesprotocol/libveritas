@@ -150,13 +150,9 @@ impl<'a> Iterator for CertificateIter<'a> {
 
 #[derive(Clone)]
 pub struct Veritas {
-    tip: RootAnchor,
     anchors: Vec<RootAnchor>,
-    /// The oldest anchor (block height) we have a root anchor for
     oldest_anchor: u32,
-    /// The newest anchor (block height) we have a root anchor for
     newest_anchor: u32,
-    /// When true, uses dev-mode verification for ZK receipts (accepts FakeReceipts).
     dev_mode: bool,
 }
 
@@ -634,17 +630,13 @@ impl std::error::Error for ZoneCompareError {}
 /// Error when loading or updating anchors.
 #[derive(Debug, Clone)]
 pub enum AnchorError {
-    /// Anchors must be sorted by height in descending order
     NotSorted,
-    /// At least one anchor is required
-    Empty,
 }
 
 impl fmt::Display for AnchorError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NotSorted => write!(f, "anchors must be sorted by height in descending order"),
-            Self::Empty => write!(f, "at least one anchor is required"),
         }
     }
 }
@@ -652,23 +644,34 @@ impl fmt::Display for AnchorError {
 impl std::error::Error for AnchorError {}
 
 impl Veritas {
-    pub fn from_anchors(anchors: Vec<RootAnchor>) -> Result<Self, AnchorError> {
-        if anchors.is_empty() {
-            return Err(AnchorError::Empty);
-        }
-        // Anchors must be sorted by height in descending order (newest first)
-        if !anchors.iter().rev().is_sorted_by_key(|a| a.block.height) {
-            return Err(AnchorError::NotSorted);
-        }
-        let newest_anchor = anchors[0].block.height;
-        let oldest_anchor = anchors.last().unwrap().block.height;
-        Ok(Veritas {
-            tip: anchors[0].clone(),
-            anchors,
-            oldest_anchor,
-            newest_anchor,
+    pub fn new() -> Self {
+        Veritas {
+            anchors: vec![],
+            oldest_anchor: 0,
+            newest_anchor: 0,
             dev_mode: false,
-        })
+        }
+    }
+
+    pub fn with_anchors(mut self, anchors: Vec<RootAnchor>) -> Result<Self, AnchorError> {
+        if !anchors.is_empty() {
+            if !anchors.iter().rev().is_sorted_by_key(|a| a.block.height) {
+                return Err(AnchorError::NotSorted);
+            }
+            self.newest_anchor = anchors[0].block.height;
+            self.oldest_anchor = anchors.last().unwrap().block.height;
+        }
+        self.anchors = anchors;
+        Ok(self)
+    }
+
+    pub fn with_dev_mode(mut self, enabled: bool) -> Self {
+        self.dev_mode = enabled;
+        self
+    }
+
+    pub fn dev_mode(&self) -> bool {
+        self.dev_mode
     }
 
     pub fn oldest_anchor(&self) -> u32 {
@@ -679,27 +682,8 @@ impl Veritas {
         self.newest_anchor
     }
 
-    pub fn update(&mut self, anchors: Vec<RootAnchor>) -> Result<(), AnchorError> {
-        if anchors.is_empty() {
-            return Err(AnchorError::Empty);
-        }
-        if !anchors.iter().rev().is_sorted_by_key(|a| a.block.height) {
-            return Err(AnchorError::NotSorted);
-        }
-        self.tip = anchors[0].clone();
-        self.newest_anchor = anchors[0].block.height;
-        self.oldest_anchor = anchors.last().unwrap().block.height;
-        self.anchors = anchors;
-        Ok(())
-    }
-
-    pub fn set_dev_mode(&mut self, enabled: bool) {
-        self.dev_mode = enabled;
-    }
-
-    /// Check if a commitment at the given block height is finalized.
     pub fn is_finalized(&self, commitment_height: u32) -> bool {
-        let time_passed = self.tip.block.height.saturating_sub(commitment_height);
+        let time_passed = self.newest_anchor.saturating_sub(commitment_height);
         time_passed >= COMMITMENT_FINALITY_INTERVAL
     }
 

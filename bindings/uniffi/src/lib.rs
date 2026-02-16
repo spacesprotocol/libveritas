@@ -218,11 +218,12 @@ pub struct Veritas {
 impl Veritas {
     #[uniffi::constructor]
     pub fn new(anchors: &VeritasAnchors, dev_mode: bool) -> Result<Self, VeritasError> {
-        let mut inner = libveritas::Veritas::from_anchors(anchors.inner.clone())
+        let inner = libveritas::Veritas::new()
+            .with_anchors(anchors.inner.clone())
             .map_err(|e| VeritasError::InvalidInput {
                 message: e.to_string(),
-            })?;
-        inner.set_dev_mode(dev_mode);
+            })?
+            .with_dev_mode(dev_mode);
         Ok(Veritas { inner })
     }
 
