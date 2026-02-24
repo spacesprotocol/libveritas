@@ -104,7 +104,7 @@ impl VeritasZone {
     pub fn offchain_data(&self) -> Option<VeritasOffchainData> {
         self.inner.offchain_data.as_ref().map(|od| VeritasOffchainData {
             seq: od.seq,
-            data: od.data.clone(),
+            data: od.data.as_slice().to_vec(),
         })
     }
 
@@ -115,7 +115,7 @@ impl VeritasZone {
                 data: value.data.as_ref().map(|d| d.as_slice().to_vec()),
                 offchain_data: value.offchain_data.as_ref().map(|od| VeritasOffchainData {
                     seq: od.seq,
-                    data: od.data.clone(),
+                    data: od.data.as_slice().to_vec(),
                 }),
             },
             libveritas::ProvableOption::Empty => VeritasDelegateState::Empty,

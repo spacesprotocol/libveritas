@@ -3,6 +3,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use risc0_zkvm::Receipt;
 use serde::{Deserialize, Serialize};
 use spacedb::{NodeHasher, Sha256Hasher};
+use spaces_protocol::Bytes;
 use spaces_protocol::bitcoin::{secp256k1, ScriptBuf};
 use spaces_protocol::constants::ChainAnchor;
 use spaces_protocol::slabel::SLabel;
@@ -178,7 +179,7 @@ impl Handle {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct OffchainData {
     pub seq: u32,
-    pub data: Vec<u8>,
+    pub data: Bytes,
     pub signature: Signature,
 }
 
@@ -193,9 +194,9 @@ impl OffchainData {
 
     /// Returns the bytes to sign: seq || data
     pub fn signing_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(4 + self.data.len());
+        let mut bytes = Vec::with_capacity(4 + self.data.as_slice().len());
         bytes.extend_from_slice(&self.seq.to_le_bytes());
-        bytes.extend_from_slice(&self.data);
+        bytes.extend_from_slice(self.data.as_slice());
         bytes
     }
 
@@ -221,8 +222,8 @@ impl OffchainData {
             return self.seq > other.seq;
         }
         // Same seq, compare data hash for deterministic tiebreaker
-        let hash_a = Sha256Hasher::hash(&self.data);
-        let hash_b = Sha256Hasher::hash(&other.data);
+        let hash_a = Sha256Hasher::hash(self.data.as_slice());
+        let hash_b = Sha256Hasher::hash(other.data.as_slice());
         if hash_a != hash_b {
             return hash_a > hash_b;
         }
@@ -323,7 +324,7 @@ impl BorshDeserialize for Handle {
 impl BorshSerialize for OffchainData {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         BorshSerialize::serialize(&self.seq, writer)?;
-        BorshSerialize::serialize(&self.data, writer)?;
+        BorshSerialize::serialize(&self.data.to_vec(), writer)?;
         BorshSerialize::serialize(&self.signature, writer)
     }
 }
@@ -333,6 +334,6 @@ impl BorshDeserialize for OffchainData {
         let seq = u32::deserialize_reader(reader)?;
         let data = Vec::<u8>::deserialize_reader(reader)?;
         let signature = Signature::deserialize_reader(reader)?;
-        Ok(OffchainData { seq, data, signature })
+        Ok(OffchainData { seq, data: Bytes::new(data), signature })
     }
 }
