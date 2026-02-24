@@ -22,7 +22,7 @@ use spacedb::subtree::{ProofType, SubTree, ValueOrHash};
 use spaces_protocol::constants::{ChainAnchor};
 use spaces_protocol::hasher::{KeyHasher, OutpointKey, SpaceKey};
 use spaces_protocol::slabel::SLabel;
-use spaces_protocol::{Covenant, FullSpaceOut, Space, SpaceOut};
+use spaces_protocol::{Bytes, Covenant, FullSpaceOut, Space, SpaceOut};
 use spaces_ptr::sptr::Sptr;
 use spaces_ptr::{
     CommitmentKey, FullPtrOut, Ptr, PtrOut, PtrOutpointKey, RegistryKey, RegistrySptrKey,
@@ -475,7 +475,7 @@ impl TestHandle {
     pub fn set_offchain_data(&mut self, seq: u32, data: &[u8]) {
         let mut data = OffchainData {
             seq,
-            data: data.to_vec(),
+            data: Bytes::new(data.to_vec()),
             signature: Signature([0u8; 64]),
         };
         data.signature = sign_mesage(&data.signing_bytes(), &self.keypair);
