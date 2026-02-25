@@ -14,12 +14,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         include:
           - os: ubuntu-latest
             args: ""
-            manylinux: manylinux_2_35
+            manylinux: auto
           - os: macos-latest
+            args: ""
+            manylinux: "off"
+          - os: windows-latest
             args: ""
             manylinux: "off"
     steps:
@@ -29,17 +32,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - uses: Swatinem/rust-cache@v2
-
-      - name: Install risc0 toolchain
-        shell: bash
-        run: |
-          curl -L https://risczero.com/install | bash
-          echo "$HOME/.risc0/bin" >> "$GITHUB_PATH"
-      - name: Install rzup
-        shell: bash
-        run: rzup install
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v5
         with:
@@ -60,17 +52,13 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           working-directory: bindings/python
-          args: --release
+          args: --release --out dist
           manylinux: ${{ matrix.manylinux }}
-          before-script-linux: |
-            curl -L https://risczero.com/install | bash
-            export PATH="$HOME/.risc0/bin:$PATH"
-            rzup install
 
       - uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.os }}
-          path: bindings/python/target/wheels/*.whl
+          path: bindings/python/dist/*.whl
 
   publish:
     needs: build

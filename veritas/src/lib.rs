@@ -22,6 +22,7 @@ use crate::msg::OffchainData;
 pub mod cert;
 pub mod msg;
 pub mod sname;
+pub mod constants;
 
 /// Result of verifying a message.
 ///
@@ -575,8 +576,8 @@ fn verify_receipt(ci: &mut CommitmentInfo, space: &SLabel, receipt: &Receipt, de
     verify_zk_journal_matches_onchain(space, &zkc, &ci.onchain)?;
     let ctx = VerifierContext::default().with_dev_mode(dev_mode);
     let image_id = match zkc.kind {
-        CommitmentKind::Fold => libveritas_methods::FOLD_ID,
-        CommitmentKind::Step => libveritas_methods::STEP_ID,
+        CommitmentKind::Fold => constants::FOLD_ID,
+        CommitmentKind::Step => constants::STEP_ID,
     };
     receipt
         .verify_with_context(&ctx, image_id)
@@ -1422,7 +1423,7 @@ fn verify_zk_journal_matches_onchain(space: &SLabel, zk: &libveritas_zk::guest::
     if zk.space != space_hash {
         return Err(MessageError::ReceiptSpaceMismatch { space: space_str });
     }
-    if zk.policy_fold != libveritas_methods::FOLD_ID || zk.policy_step != libveritas_methods::STEP_ID {
+    if zk.policy_fold != constants::FOLD_ID || zk.policy_step != constants::STEP_ID {
         return Err(MessageError::ReceiptPolicyMismatch { space: space_str });
     }
     if zk.final_root != onchain.state_root {
