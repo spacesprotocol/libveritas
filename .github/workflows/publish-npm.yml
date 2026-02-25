@@ -27,6 +27,8 @@ jobs:
           curl -L https://risczero.com/install | bash
           echo "$HOME/.risc0/bin" >> "$GITHUB_PATH"
       - run: rzup install
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
