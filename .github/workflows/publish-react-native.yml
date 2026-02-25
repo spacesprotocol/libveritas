@@ -48,7 +48,7 @@ jobs:
       - name: Install dependencies
         working-directory: bindings/react-native
         run: |
-          yarn install --frozen-lockfile
+          yarn install --frozen-lockfile --ignore-scripts
           yarn add --dev react-native
 
       - name: Build iOS bindings
