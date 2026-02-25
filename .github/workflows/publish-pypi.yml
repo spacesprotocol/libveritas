@@ -18,7 +18,7 @@ jobs:
         include:
           - os: ubuntu-latest
             args: ""
-            manylinux: auto
+            manylinux: manylinux_2_35
           - os: macos-latest
             args: ""
             manylinux: "off"
