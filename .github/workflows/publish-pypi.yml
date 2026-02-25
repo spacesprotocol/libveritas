@@ -56,7 +56,7 @@ jobs:
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
-          working-directory: python
+          working-directory: bindings/python
           args: --release ${{ matrix.args }}
 
       - uses: actions/upload-artifact@v4
