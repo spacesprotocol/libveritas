@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -57,6 +58,9 @@ jobs:
       - name: Set version from tag
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="0.0.0-dev.$(date +%Y%m%d%H%M%S)"
+          fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
       - name: Build and publish AAR
