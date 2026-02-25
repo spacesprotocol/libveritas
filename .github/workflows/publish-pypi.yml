@@ -48,10 +48,11 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
-            VERSION="0.0.0.dev$(date +%Y%m%d%H%M%S)"
+            VERSION="0.0.0-dev.$(date +%Y%m%d%H%M%S)"
           fi
-          sed -i.bak "s/^version = \"0.1.0\"/version = \"$VERSION\"/" bindings/python/pyproject.toml
           sed -i.bak "s/^version = \"0.1.0\"/version = \"$VERSION\"/" bindings/python/Cargo.toml
+          PY_VERSION=$(echo "$VERSION" | sed 's/-dev\./\.dev/')
+          sed -i.bak "s/^version = \"0.1.0\"/version = \"$PY_VERSION\"/" bindings/python/pyproject.toml
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
