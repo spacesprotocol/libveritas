@@ -17,9 +17,11 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         include:
           - os: ubuntu-latest
-            args: --compatibility manylinux2014
+            args: ""
+            manylinux: auto
           - os: macos-latest
             args: ""
+            manylinux: "off"
     steps:
       - uses: actions/checkout@v4
 
@@ -58,7 +60,12 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           working-directory: bindings/python
-          args: --release ${{ matrix.args }}
+          args: --release
+          manylinux: ${{ matrix.manylinux }}
+          before-script-linux: |
+            curl -L https://risczero.com/install | bash
+            source "$HOME/.bashrc"
+            rzup install
 
       - uses: actions/upload-artifact@v4
         with:
