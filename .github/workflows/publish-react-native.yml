@@ -47,9 +47,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: bindings/react-native
-        run: |
-          yarn install --frozen-lockfile --ignore-scripts
-          yarn add --dev react-native
+        run: yarn install --frozen-lockfile --ignore-scripts
 
       - name: Build iOS bindings
         working-directory: bindings/react-native
@@ -67,6 +65,10 @@ jobs:
             VERSION="0.0.0-dev.$(date +%Y%m%d%H%M%S)"
           fi
           npm version "$VERSION" --no-git-tag-version
+
+      - name: Install peer dependencies
+        working-directory: bindings/react-native
+        run: yarn add --dev --ignore-scripts react-native
 
       - name: Build TypeScript
         working-directory: bindings/react-native
