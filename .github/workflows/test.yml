@@ -21,6 +21,22 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Build
+        run: cargo build -p libveritas
+
+      - name: Run tests
+        run: cargo test -p libveritas
+
+  verify-elfs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
       - name: Install risc0 toolchain
         run: |
           curl -L https://risczero.com/install | bash
@@ -29,13 +45,63 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          rzup install --verbose --force cargo-risczero 3.0.1
-          rzup install --verbose --force r0vm 3.0.1
-          rzup install --verbose --force rust 1.88.0
+          rzup install --verbose --force cargo-risczero 3.0.5
+          rzup install --verbose --force r0vm 3.0.5
+          rzup install --verbose --force rust 1.91.1
           rzup install --verbose --force cpp
 
-      - name: Build
-        run: cargo build -p libveritas
+      - name: Build guest programs with Docker
+        run: cargo risczero build --manifest-path methods/guest/Cargo.toml
 
-      - name: Run tests
-        run: cargo test -p libveritas
+      - name: Verify image IDs match constants.rs
+        run: |
+          FOLD_HEX=$(r0vm --id --elf methods/guest/target/riscv32im-risc0-zkvm-elf/docker/fold.bin)
+          STEP_HEX=$(r0vm --id --elf methods/guest/target/riscv32im-risc0-zkvm-elf/docker/step.bin)
+
+          # Extract current IDs from constants.rs
+          FOLD_CURRENT=$(grep 'FOLD_ID' veritas/src/constants.rs | head -1)
+          STEP_CURRENT=$(grep 'STEP_ID' veritas/src/constants.rs | head -1)
+
+          echo "Docker FOLD: ${FOLD_HEX}"
+          echo "Docker STEP: ${STEP_HEX}"
+          echo "Constants FOLD: ${FOLD_CURRENT}"
+          echo "Constants STEP: ${STEP_CURRENT}"
+
+          # Convert hex to [u32; 8] and compare
+          hex_to_u32_array() {
+              local hex=$1
+              local result="["
+              for i in 0 8 16 24 32 40 48 56; do
+                  local chunk=${hex:$i:8}
+                  local le="${chunk:6:2}${chunk:4:2}${chunk:2:2}${chunk:0:2}"
+                  local dec=$((16#${le}))
+                  if [ $i -gt 0 ]; then result+=", "; fi
+                  result+="${dec}"
+              done
+              result+="]"
+              echo "$result"
+          }
+
+          FOLD_EXPECTED=$(hex_to_u32_array "${FOLD_HEX}")
+          STEP_EXPECTED=$(hex_to_u32_array "${STEP_HEX}")
+
+          echo "Expected FOLD_ID: ${FOLD_EXPECTED}"
+          echo "Expected STEP_ID: ${STEP_EXPECTED}"
+
+          if ! echo "${FOLD_CURRENT}" | grep -qF "${FOLD_EXPECTED}"; then
+              echo "::error::FOLD_ID mismatch! Run ./update-elfs.sh to update."
+              exit 1
+          fi
+
+          if ! echo "${STEP_CURRENT}" | grep -qF "${STEP_EXPECTED}"; then
+              echo "::error::STEP_ID mismatch! Run ./update-elfs.sh to update."
+              exit 1
+          fi
+
+          echo "Image IDs match constants.rs"
+
+      - name: Verify ELF binaries match
+        run: |
+          diff veritas/elfs/fold.bin methods/guest/target/riscv32im-risc0-zkvm-elf/docker/fold.bin
+          diff veritas/elfs/step.bin methods/guest/target/riscv32im-risc0-zkvm-elf/docker/step.bin
+          echo "ELF binaries match"

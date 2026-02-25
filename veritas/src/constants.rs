@@ -1,11 +1,14 @@
-// Method IDs for ZK receipt verification.
+// Method IDs and ELFs for ZK receipt verification.
 //
-// Hardcoded here to avoid relying on methods crate since it needs risc0 toolchain.
+// These are generated from reproducible (docker) builds of the guest programs.
 //
-// To update after changing guest programs:
-//   1. Build the methods crate: cargo build -p libveritas_methods
-//   2. Copy FOLD_ID and STEP_ID from the generated file:
-//      target/debug/build/libveritas_methods-*/out/methods.rs
+// To update after changing guest programs, run:
+//   ./update-elfs.sh
 
-pub const FOLD_ID: [u32; 8] = [4057896122, 3448775116, 3466485410, 3036163001, 1103873946, 3889477734, 4278389213, 67817676];
-pub const STEP_ID: [u32; 8] = [504298350, 2690744795, 148952875, 2556916216, 3739630024, 299707457, 1792780313, 2285557624];
+pub const FOLD_ID: [u32; 8] = [524008615, 1027686441, 358720433, 745629775, 1729316702, 1483879221, 1162362469, 1835986606];
+pub const STEP_ID: [u32; 8] = [664565856, 314861063, 3530579611, 1001594314, 3512226603, 1901436919, 2995000795, 1715160485];
+
+#[cfg(feature = "elf")]
+pub const FOLD_ELF: &[u8] = include_bytes!("../elfs/fold.bin");
+#[cfg(feature = "elf")]
+pub const STEP_ELF: &[u8] = include_bytes!("../elfs/step.bin");

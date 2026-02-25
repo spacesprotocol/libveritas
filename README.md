@@ -228,3 +228,36 @@ const better = newerZone.is_better_than(olderZone); // true
 ```
 
 Zones can be serialized for storage with `to_bytes()` and later restored with `decode_zone()`.
+
+## Guest ELF binaries
+
+The compiled guest program ELF binaries are available behind the `elf` feature flag for provers:
+
+```toml
+[dependencies]
+libveritas = { version = "0.1", features = ["elf"] }
+```
+
+```rust
+use libveritas::constants::{FOLD_ELF, STEP_ELF, FOLD_ID, STEP_ID};
+```
+
+The image IDs (`FOLD_ID`, `STEP_ID`) are always available without the feature flag.
+
+## Development
+
+### Updating guest programs
+
+When modifying the ZK guest programs in `methods/guest/src/bin/`, the baked ELF binaries and
+image IDs must be updated. Run:
+
+```bash
+./update-elfs.sh
+```
+
+This will:
+1. Build the guest programs reproducibly using Docker (`cargo risczero build`)
+2. Copy the compiled ELF binaries to `veritas/elfs/`
+3. Compute the image IDs and update `veritas/src/constants.rs`
+
+Requirements: [RISC Zero toolchain](https://dev.risczero.com/api/zkvm/install) (`cargo-risczero`, `r0vm`) and Docker.
