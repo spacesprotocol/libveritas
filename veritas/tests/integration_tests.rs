@@ -951,3 +951,9 @@ fn certificate_iterator_leaves_only() {
     assert_eq!(certs[0].subject, sname("alice@bitcoin"));
     assert!(matches!(certs[0].witness, Witness::Leaf { .. }));
 }
+
+#[test]
+fn method_ids_match() {
+    assert_eq!(libveritas::constants::FOLD_ID, libveritas_methods::FOLD_ID);
+    assert_eq!(libveritas::constants::STEP_ID, libveritas_methods::STEP_ID);
+}
