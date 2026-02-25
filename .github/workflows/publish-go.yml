@@ -20,6 +20,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Install risc0 toolchain
+        run: |
+          curl -L https://risczero.com/install | bash
+          echo "$HOME/.risc0/bin" >> "$GITHUB_PATH"
+      - run: rzup install
+
       - name: Install uniffi-bindgen-go
         run: cargo install uniffi-bindgen-go --git https://github.com/NordSecurity/uniffi-bindgen-go --tag v0.4.0+v0.28.3
 

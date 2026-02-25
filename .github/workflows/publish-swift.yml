@@ -27,6 +27,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Install risc0 toolchain
+        run: |
+          curl -L https://risczero.com/install | bash
+          echo "$HOME/.risc0/bin" >> "$GITHUB_PATH"
+      - run: rzup install
+
       - name: Build static libraries
         run: |
           for target in aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-darwin x86_64-apple-darwin; do

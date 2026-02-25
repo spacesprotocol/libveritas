@@ -30,6 +30,15 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Install risc0 toolchain
+        shell: bash
+        run: |
+          curl -L https://risczero.com/install | bash
+          echo "$HOME/.risc0/bin" >> "$GITHUB_PATH"
+      - name: Install rzup
+        shell: bash
+        run: rzup install
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
