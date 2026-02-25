@@ -64,7 +64,7 @@ jobs:
           manylinux: ${{ matrix.manylinux }}
           before-script-linux: |
             curl -L https://risczero.com/install | bash
-            source "$HOME/.bashrc"
+            export PATH="$HOME/.risc0/bin:$PATH"
             rzup install
 
       - uses: actions/upload-artifact@v4
