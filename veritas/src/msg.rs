@@ -324,7 +324,7 @@ impl BorshDeserialize for Handle {
 impl BorshSerialize for OffchainData {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         BorshSerialize::serialize(&self.seq, writer)?;
-        BorshSerialize::serialize(&self.data.to_vec(), writer)?;
+        BorshSerialize::serialize(&self.data.as_slice().to_vec(), writer)?;
         BorshSerialize::serialize(&self.signature, writer)
     }
 }
