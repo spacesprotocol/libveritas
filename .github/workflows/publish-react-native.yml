@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -52,6 +53,9 @@ jobs:
         working-directory: bindings/react-native
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="0.0.0-dev.$(date +%Y%m%d%H%M%S)"
+          fi
           npm version "$VERSION" --no-git-tag-version
 
       - name: Build TypeScript

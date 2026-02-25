@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -34,6 +35,9 @@ jobs:
       - name: Setup Go module
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="0.0.0-dev.$(date +%Y%m%d%H%M%S)"
+          fi
           cd go-publish
 
           # Initialize Go module
@@ -51,6 +55,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GO_PUBLISH_TOKEN }}
         run: |
           VERSION="${GITHUB_REF_NAME}"
+          if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="v0.0.0-dev.$(date +%Y%m%d%H%M%S)"
+          fi
           cd go-publish
 
           git init

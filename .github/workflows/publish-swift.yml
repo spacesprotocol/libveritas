@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -86,6 +87,9 @@ jobs:
           GH_TOKEN: ${{ secrets.SWIFT_PUBLISH_TOKEN }}
         run: |
           VERSION="${GITHUB_REF_NAME}"
+          if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="v0.0.0-dev.$(date +%Y%m%d%H%M%S)"
+          fi
           CHECKSUM="${{ steps.checksum.outputs.checksum }}"
 
           mkdir -p swift-publish/Sources/Libveritas
@@ -136,6 +140,9 @@ jobs:
           GH_TOKEN: ${{ secrets.SWIFT_PUBLISH_TOKEN }}
         run: |
           VERSION="${GITHUB_REF_NAME}"
+          if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="v0.0.0-dev.$(date +%Y%m%d%H%M%S)"
+          fi
           gh release create "${VERSION}" \
             --repo spacesprotocol/libveritas-swift \
             --title "${VERSION}" \
