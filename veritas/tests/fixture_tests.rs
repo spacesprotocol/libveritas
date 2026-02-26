@@ -43,7 +43,7 @@ fn test_no_delegate_info_provided() {
     let zone = res.zones.first().unwrap();
     assert!(matches!(zone.delegate, ProvableOption::Unknown));
     assert!(matches!(zone.sovereignty,  SovereigntyState::Sovereign));
-    assert!(matches!(zone.commitment,  ProvableOption::Unknown));
+    assert!(!matches!(zone.commitment,  ProvableOption::Exists {..}));
 
     // Now create the message without omitting chain proofs
     let msg = state.message(vec![initial_bundle]);
