@@ -1,4 +1,4 @@
-use bitcoin::hashes::{Hash as BitcoinHash, sha256, HashEngine};
+use bitcoin::hashes::{Hash as BitcoinHash};
 use bitcoin::key::Keypair;
 use bitcoin::key::rand::Rng;
 use bitcoin::secp256k1::Secp256k1;
@@ -475,8 +475,8 @@ impl TestHandleTree {
         let receipt = if onchain_commitment.prev_root.is_some() {
             let commitment = libveritas_zk::guest::Commitment {
                 space: KeyHash::hash(self.space.as_ref()),
-                policy_step: libveritas_methods::STEP_ID,
-                policy_fold: libveritas_methods::FOLD_ID,
+                policy_step: libveritas::constants::STEP_ID,
+                policy_fold: libveritas::constants::FOLD_ID,
                 initial_root,
                 final_root,
                 rolling_hash: onchain_commitment.rolling_hash,
@@ -489,7 +489,7 @@ impl TestHandleTree {
             let words = risc0_zkvm::serde::to_vec(&commitment).expect("serialize commitment");
             let journal_bytes: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
 
-            let receipt_claim = ReceiptClaim::ok(libveritas_methods::FOLD_ID, journal_bytes.clone());
+            let receipt_claim = ReceiptClaim::ok(libveritas::constants::FOLD_ID, journal_bytes.clone());
             Some(
                 Receipt::new(InnerReceipt::Fake(FakeReceipt::new(receipt_claim)), journal_bytes)
             )
@@ -950,10 +950,4 @@ fn certificate_iterator_leaves_only() {
     assert_eq!(certs.len(), 1);
     assert_eq!(certs[0].subject, sname("alice@bitcoin"));
     assert!(matches!(certs[0].witness, Witness::Leaf { .. }));
-}
-
-#[test]
-fn method_ids_match() {
-    assert_eq!(libveritas::constants::FOLD_ID, libveritas_methods::FOLD_ID);
-    assert_eq!(libveritas::constants::STEP_ID, libveritas_methods::STEP_ID);
 }

@@ -3,13 +3,16 @@ name = "libveritas"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+elf = []
+
 [dependencies]
 spacedb = { workspace = true }
 spaces_protocol = {workspace = true}
 spaces_ptr = {workspace = true}
 serde = { version = "1.0", features = ["derive"] }
 base64 = "0.22"
-risc0-zkvm = { version = "^3.0.1", default-features = false, features = ["std"] }
+risc0-zkvm = { version = "3.0.5", default-features = false, features = ["std"] }
 borsh = { version = "1.6", features = ["derive", "std"] }
 hex = "0.4"
 libveritas_zk = {path = "../zk"}
@@ -18,6 +21,5 @@ libveritas_zk = {path = "../zk"}
 borsh_utils = {workspace = true}
 bitcoin = { version = "0.32", default-features = false, features = [ "rand-std"] }
 libveritas_testutil = { path = "../testutil" }
-libveritas_methods = { path = "../methods" }
 serde_json = "1.0.149"
 

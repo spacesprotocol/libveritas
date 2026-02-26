@@ -554,8 +554,8 @@ impl TestHandleTree {
         let receipt = if onchain_commitment.prev_root.is_some() {
             let commitment = libveritas_zk::guest::Commitment {
                 space: KeyHash::hash(self.space.as_ref()),
-                policy_step: libveritas_methods::STEP_ID,
-                policy_fold: libveritas_methods::FOLD_ID,
+                policy_step: libveritas::constants::STEP_ID,
+                policy_fold: libveritas::constants::FOLD_ID,
                 initial_root,
                 final_root,
                 rolling_hash: onchain_commitment.rolling_hash,
@@ -566,7 +566,7 @@ impl TestHandleTree {
             let journal_bytes: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
 
             let receipt_claim =
-                ReceiptClaim::ok(libveritas_methods::FOLD_ID, journal_bytes.clone());
+                ReceiptClaim::ok(libveritas::constants::FOLD_ID, journal_bytes.clone());
             Some(Receipt::new(
                 InnerReceipt::Fake(FakeReceipt::new(receipt_claim)),
                 journal_bytes,
