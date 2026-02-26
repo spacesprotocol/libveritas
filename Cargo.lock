@@ -1414,7 +1414,6 @@ dependencies = [
  "borsh",
  "borsh_utils",
  "libveritas",
- "libveritas_methods",
  "libveritas_zk",
  "risc0-zkvm",
  "serde_json",

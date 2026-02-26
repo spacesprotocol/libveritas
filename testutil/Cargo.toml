@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 libveritas = { path = "../veritas" }
-libveritas_methods = { path = "../methods" }
 libveritas_zk = { path = "../zk" }
 spacedb = { workspace = true }
 spaces_protocol = { workspace = true }
