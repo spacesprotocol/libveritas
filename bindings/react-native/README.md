@@ -39,7 +39,7 @@ const ctx = new QueryContext();
 ctx.addRequest('alice@bitcoin');
 
 // Verify a message (binary data from relay)
-const msg = Message.fromBytes(messageBytes);
+const msg = new Message(messageBytes);
 const result = veritas.verifyMessage(ctx, msg);
 
 // Inspect verified zones

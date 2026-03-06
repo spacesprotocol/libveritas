@@ -269,7 +269,7 @@ pub struct Message {
 impl Message {
     /// Decode a message from borsh bytes.
     #[uniffi::constructor]
-    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, VeritasError> {
+    pub fn new(bytes: Vec<u8>) -> Result<Self, VeritasError> {
         let inner = msg::Message::from_slice(&bytes)
             .map_err(|e| VeritasError::InvalidInput {
                 message: format!("invalid message: {e}"),

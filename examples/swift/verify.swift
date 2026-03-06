@@ -27,7 +27,7 @@ struct Verify {
         let ctx = QueryContext()
 
         // Verify message
-        let msg = try Message.fromBytes(bytes: Array(msgBytes))
+        let msg = try Message(bytes: Array(msgBytes))
         let result = try veritas.verifyMessage(ctx: ctx, msg: msg)
 
         // Zones

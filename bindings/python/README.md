@@ -23,7 +23,7 @@ print(f"Anchors: {veritas.oldest_anchor()} .. {veritas.newest_anchor()}")
 ctx = QueryContext()
 
 # Verify a message
-msg = Message.from_bytes(message_bytes)
+msg = Message(message_bytes)
 result = veritas.verify_message(ctx, msg)
 
 # Inspect verified zones
