@@ -340,7 +340,7 @@ impl MessageBuilder {
             .ok_or_else(|| VeritasError::InvalidInput {
                 message: "builder already consumed by build()".to_string(),
             })?;
-        let chain: msg::ChainProof = borsh::from_slice(&chain_proof)
+        let chain = msg::ChainProof::from_slice(&chain_proof)
             .map_err(|e| VeritasError::InvalidInput {
                 message: format!("invalid chain proof: {e}"),
             })?;
@@ -466,20 +466,18 @@ impl Veritas {
         self.inner.sovereignty_for(commitment_height).to_string()
     }
 
-    /// Verify an encoded message against a query context.
+    /// Verify a message against a query context.
     pub fn verify_message(
         &self,
         ctx: &QueryContext,
-        msg: Vec<u8>,
+        msg: &Message,
     ) -> Result<Arc<VerifiedMessage>, VeritasError> {
         let ctx_guard = ctx.inner.read().unwrap();
-        let msg = msg::Message::from_slice(&msg).map_err(|e| VeritasError::InvalidInput {
-            message: format!("invalid message: {e}"),
-        })?;
+        let msg_inner = msg.inner.read().unwrap();
 
         let inner = self
             .inner
-            .verify_message(&ctx_guard, msg)
+            .verify_message(&ctx_guard, msg_inner.clone())
             .map_err(|e| VeritasError::VerificationFailed {
                 message: e.to_string(),
             })?;

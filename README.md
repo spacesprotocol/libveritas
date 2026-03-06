@@ -82,13 +82,12 @@ for zone in &result.zones {
 
 ```javascript
 import { readFileSync } from "fs";
-import { Veritas, QueryContext } from "@spacesprotocol/libveritas";
+import { Veritas, QueryContext, Message } from "@spacesprotocol/libveritas";
 
 const anchors = JSON.parse(readFileSync("trust_anchors.json", "utf8"));
-const msg = readFileSync("message.bin");
+const msg = new Message(readFileSync("message.bin"));
 
 const veritas = new Veritas(anchors);
-// or: const veritas = Veritas.withDevMode(anchors);
 const ctx = new QueryContext();
 const result = veritas.verifyMessage(ctx, msg);
 
@@ -160,13 +159,15 @@ import {
   Veritas,
   Anchors,
   QueryContext,
+  Message,
 } from '@spacesprotocol/react-native-libveritas';
 
 const anchors = Anchors.fromJson(anchorsJsonString);
 const veritas = new Veritas(anchors);
 
 const ctx = new QueryContext();
-const result = veritas.verifyMessage(ctx, messageBytes);
+const msg = Message.fromBytes(messageBytes);
+const result = veritas.verifyMessage(ctx, msg);
 
 for (const zone of result.zones()) {
   console.log(`${zone.handle()} -> ${zone.sovereignty()}`);

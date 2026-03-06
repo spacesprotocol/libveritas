@@ -230,7 +230,7 @@ impl MessageBuilder {
             .inner
             .take()
             .ok_or_else(|| JsError::new("builder already consumed by build()"))?;
-        let chain: msg::ChainProof = borsh::from_slice(chain_proof)
+        let chain = msg::ChainProof::from_slice(chain_proof)
             .map_err(|e| JsError::new(&format!("invalid chain proof: {e}")))?;
         let msg = builder
             .build(chain)
@@ -287,14 +287,11 @@ impl Veritas {
     pub fn verify_message(
         &self,
         ctx: &QueryContext,
-        msg: &[u8],
+        msg: &Message,
     ) -> Result<VerifiedMessage, JsError> {
-        let msg = msg::Message::from_slice(msg)
-            .map_err(|e| JsError::new(&format!("invalid message: {e}")))?;
-
         let inner = self
             .inner
-            .verify_message(&ctx.inner, msg)
+            .verify_message(&ctx.inner, msg.inner.clone())
             .map_err(|e| JsError::new(&e.to_string()))?;
 
         Ok(VerifiedMessage { inner })

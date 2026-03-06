@@ -13,7 +13,7 @@ npm install @spacesprotocol/libveritas
 ### Verifying a message
 
 ```javascript
-import { Veritas, QueryContext } from "@spacesprotocol/libveritas";
+import { Veritas, QueryContext, Message } from "@spacesprotocol/libveritas";
 
 // Load trust anchors
 const veritas = new Veritas(anchors);
@@ -25,7 +25,8 @@ const ctx = new QueryContext();
 ctx.addRequest("alice@bitcoin");
 
 // Verify a message (binary data from relay)
-const result = veritas.verifyMessage(ctx, messageBytes);
+const msg = new Message(messageBytes);
+const result = veritas.verifyMessage(ctx, msg);
 
 // Inspect verified zones
 for (const zone of result.zones()) {

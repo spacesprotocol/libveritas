@@ -25,6 +25,7 @@ import {
   Veritas,
   Anchors,
   QueryContext,
+  Message,
 } from '@spacesprotocol/react-native-libveritas';
 
 // Load trust anchors
@@ -38,7 +39,8 @@ const ctx = new QueryContext();
 ctx.addRequest('alice@bitcoin');
 
 // Verify a message (binary data from relay)
-const result = veritas.verifyMessage(ctx, messageBytes);
+const msg = Message.fromBytes(messageBytes);
+const result = veritas.verifyMessage(ctx, msg);
 
 // Inspect verified zones
 for (const zone of result.zones()) {

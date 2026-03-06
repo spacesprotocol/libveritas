@@ -412,6 +412,16 @@ impl BorshDeserialize for Message {
     }
 }
 
+impl ChainProof {
+    pub fn from_slice(bytes: &[u8]) -> Result<Self, std::io::Error> {
+        borsh::from_slice(bytes)
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        borsh::to_vec(self).expect("chain proof serialization should not fail")
+    }
+}
+
 impl BorshSerialize for ChainProof {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         BorshSerialize::serialize(&self.anchor, writer)?;
