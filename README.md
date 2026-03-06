@@ -88,8 +88,9 @@ const anchors = JSON.parse(readFileSync("trust_anchors.json", "utf8"));
 const msg = readFileSync("message.bin");
 
 const veritas = new Veritas(anchors);
+// or: const veritas = Veritas.withDevMode(anchors);
 const ctx = new QueryContext();
-const result = veritas.verify_message(ctx, msg);
+const result = veritas.verifyMessage(ctx, msg);
 
 for (const zone of result.zones()) {
   console.log(`${zone.handle()} -> ${zone.sovereignty()}`);
@@ -105,7 +106,7 @@ let anchorsJson = try String(contentsOfFile: "trust_anchors.json", encoding: .ut
 let msg = try Data(contentsOf: URL(fileURLWithPath: "message.bin"))
 
 let anchors = try Anchors.fromJson(json: anchorsJson)
-let veritas = try Veritas(anchors: anchors, devMode: false)
+let veritas = try Veritas(anchors: anchors)
 
 let ctx = QueryContext()
 let result = try veritas.verifyMessage(ctx: ctx, msg: msg)
@@ -133,7 +134,7 @@ val anchorsJson = File("trust_anchors.json").readText()
 val msg = File("message.bin").readBytes()
 
 val anchors = Anchors.fromJson(anchorsJson)
-val veritas = Veritas(anchors, devMode = false)
+val veritas = Veritas(anchors)
 
 val ctx = QueryContext()
 val result = veritas.verifyMessage(ctx, msg)
@@ -162,7 +163,7 @@ import {
 } from '@spacesprotocol/react-native-libveritas';
 
 const anchors = Anchors.fromJson(anchorsJsonString);
-const veritas = new Veritas(anchors, false);
+const veritas = new Veritas(anchors);
 
 const ctx = new QueryContext();
 const result = veritas.verifyMessage(ctx, messageBytes);
@@ -178,7 +179,7 @@ for (const zone of result.zones()) {
 from libveritas import Anchors, Veritas, QueryContext
 
 anchors = Anchors.from_json(anchors_json_string)
-veritas = Veritas(anchors, dev_mode=False)
+veritas = Veritas(anchors)
 
 ctx = QueryContext()
 result = veritas.verify_message(ctx, message_bytes)
@@ -211,12 +212,12 @@ By default, all handles in a message are verified. Use `QueryContext` to verify 
 const ctx = new QueryContext();
 
 // Only verify specific handles
-ctx.add_request("alice@bitcoin");
+ctx.addRequest("alice@bitcoin");
 
 // Provide a previously stored zone for context
-ctx.add_zone(storedZoneBytes);
+ctx.addZone(storedZoneBytes);
 
-const result = veritas.verify_message(ctx, msg);
+const result = veritas.verifyMessage(ctx, msg);
 ```
 
 ## Zone Comparison
@@ -224,10 +225,10 @@ const result = veritas.verify_message(ctx, msg);
 When you have multiple zone snapshots for the same handle, use `is_better_than` to determine which is more recent:
 
 ```javascript
-const better = newerZone.is_better_than(olderZone); // true
+const better = newerZone.isBetterThan(olderZone); // true
 ```
 
-Zones can be serialized for storage with `to_bytes()` and later restored with `decode_zone()`.
+Zones can be serialized for storage with `toBytes()` and later restored with `decodeZone()`.
 
 ## Guest ELF binaries
 

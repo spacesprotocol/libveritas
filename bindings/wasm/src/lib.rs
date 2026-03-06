@@ -33,12 +33,12 @@ fn parse_data_update(entry: &JsValue) -> Result<builder::DataUpdateRequest, JsEr
     let handle = SName::from_str(&name)
         .map_err(|e| JsError::new(&format!("invalid name '{}': {}", name, e)))?;
 
-    let offchain_data = get_optional_bytes(entry, "offchain_data")
+    let offchain_data = get_optional_bytes(entry, "offchainData")
         .map(|b| msg::OffchainData::from_slice(&b))
         .transpose()
         .map_err(|e| JsError::new(&format!("invalid offchain_data: {e}")))?;
 
-    let delegate_offchain_data = get_optional_bytes(entry, "delegate_offchain_data")
+    let delegate_offchain_data = get_optional_bytes(entry, "delegateOffchainData")
         .map(|b| msg::OffchainData::from_slice(&b))
         .transpose()
         .map_err(|e| JsError::new(&format!("invalid delegate_offchain_data: {e}")))?;
@@ -247,13 +247,23 @@ pub struct Veritas {
 #[wasm_bindgen]
 impl Veritas {
     #[wasm_bindgen(constructor)]
-    pub fn new(anchors: JsValue, dev_mode: bool) -> Result<Veritas, JsError> {
+    pub fn new(anchors: JsValue) -> Result<Veritas, JsError> {
+        let anchors: Vec<RootAnchor> = serde_wasm_bindgen::from_value(anchors)
+            .map_err(|e| JsError::new(&format!("invalid anchors: {e}")))?;
+        let inner = libveritas::Veritas::new()
+            .with_anchors(anchors)
+            .map_err(|e| JsError::new(&e.to_string()))?;
+        Ok(Veritas { inner })
+    }
+
+    #[wasm_bindgen(js_name = "withDevMode")]
+    pub fn with_dev_mode(anchors: JsValue) -> Result<Veritas, JsError> {
         let anchors: Vec<RootAnchor> = serde_wasm_bindgen::from_value(anchors)
             .map_err(|e| JsError::new(&format!("invalid anchors: {e}")))?;
         let inner = libveritas::Veritas::new()
             .with_anchors(anchors)
             .map_err(|e| JsError::new(&e.to_string()))?
-            .with_dev_mode(dev_mode);
+            .with_dev_mode(true);
         Ok(Veritas { inner })
     }
 

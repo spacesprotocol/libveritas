@@ -25,7 +25,7 @@ func main() {
         panic(err)
     }
 
-    v, err := veritas.NewVeritas(anchors, false)
+    v, err := veritas.NewVeritas(anchors)
     if err != nil {
         panic(err)
     }
