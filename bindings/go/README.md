@@ -36,7 +36,7 @@ func main() {
     ctx := veritas.NewQueryContext()
 
     // Verify a message
-    msg, err := veritas.MessageFromBytes(messageBytes)
+    msg, err := veritas.NewMessage(messageBytes)
     if err != nil {
         panic(err)
     }

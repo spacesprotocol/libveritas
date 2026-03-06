@@ -26,7 +26,7 @@ fun main() {
     val ctx = QueryContext()
 
     // Verify message
-    val msg = Message.fromBytes(msgBytes.toList())
+    val msg = Message(msgBytes.toList())
     val result = veritas.verifyMessage(ctx, msg)
 
     // Zones

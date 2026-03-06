@@ -108,7 +108,7 @@ let msgBytes = try Data(contentsOf: URL(fileURLWithPath: "message.bin"))
 let anchors = try Anchors.fromJson(json: anchorsJson)
 let veritas = try Veritas(anchors: anchors)
 
-let msg = try Message.fromBytes(bytes: Array(msgBytes))
+let msg = try Message(bytes: Array(msgBytes))
 let ctx = QueryContext()
 let result = try veritas.verifyMessage(ctx: ctx, msg: msg)
 
@@ -137,7 +137,7 @@ val msgBytes = File("message.bin").readBytes()
 val anchors = Anchors.fromJson(anchorsJson)
 val veritas = Veritas(anchors)
 
-val msg = Message.fromBytes(msgBytes.toList())
+val msg = Message(msgBytes.toList())
 val ctx = QueryContext()
 val result = veritas.verifyMessage(ctx, msg)
 
@@ -169,7 +169,7 @@ const anchors = Anchors.fromJson(anchorsJsonString);
 const veritas = new Veritas(anchors);
 
 const ctx = new QueryContext();
-const msg = Message.fromBytes(messageBytes);
+const msg = new Message(messageBytes);
 const result = veritas.verifyMessage(ctx, msg);
 
 for (const zone of result.zones()) {
@@ -185,7 +185,7 @@ from libveritas import Anchors, Veritas, QueryContext, Message
 anchors = Anchors.from_json(anchors_json_string)
 veritas = Veritas(anchors)
 
-msg = Message.from_bytes(message_bytes)
+msg = Message(message_bytes)
 ctx = QueryContext()
 result = veritas.verify_message(ctx, msg)
 
@@ -201,7 +201,7 @@ import veritas "github.com/spacesprotocol/libveritas-go"
 anchors, _ := veritas.AnchorsFromJson(anchorsJsonString)
 v, _ := veritas.NewVeritas(anchors)
 
-msg, _ := veritas.MessageFromBytes(messageBytes)
+msg, _ := veritas.NewMessage(messageBytes)
 ctx := veritas.NewQueryContext()
 result, _ := v.VerifyMessage(ctx, msg)
 
