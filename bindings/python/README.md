@@ -11,11 +11,11 @@ pip install libveritas
 ## Usage
 
 ```python
-from libveritas import Anchors, Veritas, QueryContext
+from libveritas import Anchors, Veritas, QueryContext, Message
 
 # Load trust anchors
 anchors = Anchors.from_json(anchors_json_string)
-veritas = Veritas(anchors, dev_mode=False)
+veritas = Veritas(anchors)
 
 print(f"Anchors: {veritas.oldest_anchor()} .. {veritas.newest_anchor()}")
 
@@ -23,7 +23,8 @@ print(f"Anchors: {veritas.oldest_anchor()} .. {veritas.newest_anchor()}")
 ctx = QueryContext()
 
 # Verify a message
-result = veritas.verify_message(ctx, message_bytes)
+msg = Message.from_bytes(message_bytes)
+result = veritas.verify_message(ctx, msg)
 
 # Inspect verified zones
 for zone in result.zones():

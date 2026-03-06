@@ -174,8 +174,8 @@ impl Message {
     /// Accepts a JS array of data update entries:
     /// ```js
     /// msg.update([
-    ///   { name: "alice@bitcoin", offchain_data: Uint8Array },
-    ///   { name: "@bitcoin", delegate_offchain_data: Uint8Array }
+    ///   { name: "alice@bitcoin", offchainData: Uint8Array },
+    ///   { name: "@bitcoin", delegateOffchainData: Uint8Array }
     /// ])
     /// ```
     ///
@@ -199,8 +199,8 @@ impl MessageBuilder {
     ///
     /// ```js
     /// let builder = new MessageBuilder([
-    ///   { name: "@bitcoin", offchain_data: Uint8Array, cert: Uint8Array },
-    ///   { name: "alice@bitcoin", offchain_data: Uint8Array, cert: Uint8Array }
+    ///   { name: "@bitcoin", offchainData: Uint8Array, cert: Uint8Array },
+    ///   { name: "alice@bitcoin", offchainData: Uint8Array, cert: Uint8Array }
     /// ])
     /// ```
     #[wasm_bindgen(constructor)]

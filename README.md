@@ -62,13 +62,14 @@ go get github.com/spacesprotocol/libveritas-go
 
 ```rust
 use libveritas::Veritas;
-use libveritas::msg::QueryContext;
+use libveritas::msg::{Message, QueryContext};
 
 let anchors_json = std::fs::read("trust_anchors.json")?;
-let veritas = Veritas::from_anchors(serde_json::from_slice(&anchors_json)?)?;
+let veritas = Veritas::new()
+    .with_anchors(serde_json::from_slice(&anchors_json)?)?;
 
 let msg_bytes = std::fs::read("message.bin")?;
-let msg = borsh::from_slice(&msg_bytes)?;
+let msg = Message::from_slice(&msg_bytes)?;
 
 let ctx = QueryContext::new();
 let result = veritas.verify_message(&ctx, msg)?;
@@ -102,11 +103,12 @@ for (const zone of result.zones()) {
 import Libveritas
 
 let anchorsJson = try String(contentsOfFile: "trust_anchors.json", encoding: .utf8)
-let msg = try Data(contentsOf: URL(fileURLWithPath: "message.bin"))
+let msgBytes = try Data(contentsOf: URL(fileURLWithPath: "message.bin"))
 
 let anchors = try Anchors.fromJson(json: anchorsJson)
 let veritas = try Veritas(anchors: anchors)
 
+let msg = try Message.fromBytes(bytes: Array(msgBytes))
 let ctx = QueryContext()
 let result = try veritas.verifyMessage(ctx: ctx, msg: msg)
 
@@ -130,11 +132,12 @@ for zone in result.zones() {
 import uniffi.libveritas_uniffi.*
 
 val anchorsJson = File("trust_anchors.json").readText()
-val msg = File("message.bin").readBytes()
+val msgBytes = File("message.bin").readBytes()
 
 val anchors = Anchors.fromJson(anchorsJson)
 val veritas = Veritas(anchors)
 
+val msg = Message.fromBytes(msgBytes.toList())
 val ctx = QueryContext()
 val result = veritas.verifyMessage(ctx, msg)
 
@@ -177,13 +180,14 @@ for (const zone of result.zones()) {
 ### Python
 
 ```python
-from libveritas import Anchors, Veritas, QueryContext
+from libveritas import Anchors, Veritas, QueryContext, Message
 
 anchors = Anchors.from_json(anchors_json_string)
 veritas = Veritas(anchors)
 
+msg = Message.from_bytes(message_bytes)
 ctx = QueryContext()
-result = veritas.verify_message(ctx, message_bytes)
+result = veritas.verify_message(ctx, msg)
 
 for zone in result.zones():
     print(f"{zone.handle()} -> {zone.sovereignty()}")
@@ -195,10 +199,11 @@ for zone in result.zones():
 import veritas "github.com/spacesprotocol/libveritas-go"
 
 anchors, _ := veritas.AnchorsFromJson(anchorsJsonString)
-v, _ := veritas.NewVeritas(anchors, false)
+v, _ := veritas.NewVeritas(anchors)
 
+msg, _ := veritas.MessageFromBytes(messageBytes)
 ctx := veritas.NewQueryContext()
-result, _ := v.VerifyMessage(ctx, messageBytes)
+result, _ := v.VerifyMessage(ctx, msg)
 
 for _, zone := range result.Zones() {
     fmt.Printf("%s -> %s\n", zone.Handle(), zone.Sovereignty())
