@@ -16,27 +16,27 @@ npm install @spacesprotocol/libveritas
 import { Veritas, QueryContext } from "@spacesprotocol/libveritas";
 
 // Load trust anchors
-const veritas = new Veritas(anchors, false);
+const veritas = new Veritas(anchors);
 
-console.log(`Anchors: ${veritas.oldest_anchor()} .. ${veritas.newest_anchor()}`);
+console.log(`Anchors: ${veritas.oldestAnchor()} .. ${veritas.newestAnchor()}`);
 
 // Build query context (empty = verify all handles)
 const ctx = new QueryContext();
-ctx.add_request("alice@bitcoin");
+ctx.addRequest("alice@bitcoin");
 
 // Verify a message (binary data from relay)
-const result = veritas.verify_message(ctx, messageBytes);
+const result = veritas.verifyMessage(ctx, messageBytes);
 
 // Inspect verified zones
 for (const zone of result.zones()) {
   console.log(`${zone.handle()} -> ${zone.sovereignty()}`);
 
   // Store zone for later comparison
-  const bytes = zone.to_bytes();
+  const bytes = zone.toBytes();
 }
 
 // Compare zones
-const better = newerZone.is_better_than(olderZone);
+const better = newerZone.isBetterThan(olderZone);
 
 // Get certificates
 for (const cert of result.certificates()) {
@@ -57,18 +57,18 @@ let offchainBytes = OffchainData.from(rs, sig);
 // Build a message with certificates and offchain data
 let builder = new MessageBuilder([
   { name: "@bitcoin", cert: rootCertBytes },
-  { name: "alice@bitcoin", offchain_data: offchainBytes, cert: leafCertBytes },
+  { name: "alice@bitcoin", offchainData: offchainBytes, cert: leafCertBytes },
 ]);
 
 // Get the chain proof request to send to a provider
-let request = builder.chain_proof_request();
+let request = builder.chainProofRequest();
 
 // ... send request to provider, get chain proof back ...
 
 let msg = builder.build(chainProofBytes);
 
 // Serialize for transport
-let bytes = msg.to_bytes();
+let bytes = msg.toBytes();
 ```
 
 ### Updating offchain data
@@ -82,10 +82,10 @@ let sig = wallet.signSchnorr(rs.id());
 let offchainBytes = OffchainData.from(rs, sig);
 
 msg.update([
-  { name: "alice@bitcoin", offchain_data: offchainBytes },
+  { name: "alice@bitcoin", offchainData: offchainBytes },
 ]);
 
-let updatedBytes = msg.to_bytes();
+let updatedBytes = msg.toBytes();
 ```
 
 ## Building from source

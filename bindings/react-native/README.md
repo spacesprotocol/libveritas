@@ -29,7 +29,7 @@ import {
 
 // Load trust anchors
 const anchors = Anchors.fromJson(anchorsJsonString);
-const veritas = new Veritas(anchors, false);
+const veritas = new Veritas(anchors);
 
 console.log(`Anchors: ${veritas.oldestAnchor()} .. ${veritas.newestAnchor()}`);
 

@@ -430,13 +430,23 @@ pub struct Veritas {
 #[uniffi::export]
 impl Veritas {
     #[uniffi::constructor]
-    pub fn new(anchors: &Anchors, dev_mode: bool) -> Result<Self, VeritasError> {
+    pub fn new(anchors: &Anchors) -> Result<Self, VeritasError> {
+        let inner = libveritas::Veritas::new()
+            .with_anchors(anchors.inner.clone())
+            .map_err(|e| VeritasError::InvalidInput {
+                message: e.to_string(),
+            })?;
+        Ok(Veritas { inner })
+    }
+
+    #[uniffi::constructor(name = "with_dev_mode")]
+    pub fn with_dev_mode(anchors: &Anchors) -> Result<Self, VeritasError> {
         let inner = libveritas::Veritas::new()
             .with_anchors(anchors.inner.clone())
             .map_err(|e| VeritasError::InvalidInput {
                 message: e.to_string(),
             })?
-            .with_dev_mode(dev_mode);
+            .with_dev_mode(true);
         Ok(Veritas { inner })
     }
 

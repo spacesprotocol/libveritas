@@ -13,5 +13,4 @@ spacedb = { git = "https://github.com/spacesprotocol/spacedb.git", version = "0.
 opt-level = 3
 
 [profile.release]
-debug = 1
 lto = true
