@@ -16,17 +16,18 @@ struct Verify {
     static func main() throws {
         // Load fixtures
         let anchorsJson = try String(contentsOfFile: "examples/fixture/anchors.json", encoding: .utf8)
-        let msg = try Data(contentsOf: URL(fileURLWithPath: "examples/fixture/message.bin"))
+        let msgBytes = try Data(contentsOf: URL(fileURLWithPath: "examples/fixture/message.bin"))
 
-        // Create verifier
-        let anchors = try VeritasAnchors.fromJson(json: anchorsJson)
-        let veritas = try Veritas(anchors: anchors, devMode: true)
+        // Create verifier (withDevMode for test fixtures)
+        let anchors = try Anchors.fromJson(json: anchorsJson)
+        let veritas = try Veritas.withDevMode(anchors: anchors)
         print("anchors: \(veritas.oldestAnchor()) .. \(veritas.newestAnchor())")
 
         // Build query context (empty = verify all handles)
-        let ctx = VeritasQueryContext()
+        let ctx = QueryContext()
 
         // Verify message
+        let msg = try Message.fromBytes(bytes: Array(msgBytes))
         let result = try veritas.verifyMessage(ctx: ctx, msg: msg)
 
         // Zones
@@ -45,7 +46,7 @@ struct Verify {
             }
 
             switch z.delegate() {
-            case .exists(let spk, _):
+            case .exists(let spk, _, _):
                 print("    delegate: exists (spk \(spk.count) bytes)")
             case .empty:
                 print("    delegate: empty")

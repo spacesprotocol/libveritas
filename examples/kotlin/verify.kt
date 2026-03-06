@@ -15,17 +15,18 @@ import java.io.File
 fun main() {
     // Load fixtures
     val anchorsJson = File("examples/fixture/anchors.json").readText()
-    val msg = File("examples/fixture/message.bin").readBytes()
+    val msgBytes = File("examples/fixture/message.bin").readBytes()
 
-    // Create verifier
-    val anchors = VeritasAnchors.fromJson(anchorsJson)
-    val veritas = Veritas(anchors, devMode = true)
+    // Create verifier (withDevMode for test fixtures)
+    val anchors = Anchors.fromJson(anchorsJson)
+    val veritas = Veritas.withDevMode(anchors)
     println("anchors: ${veritas.oldestAnchor()} .. ${veritas.newestAnchor()}")
 
     // Build query context (empty = verify all handles)
-    val ctx = VeritasQueryContext()
+    val ctx = QueryContext()
 
     // Verify message
+    val msg = Message.fromBytes(msgBytes.toList())
     val result = veritas.verifyMessage(ctx, msg)
 
     // Zones
@@ -35,20 +36,20 @@ fun main() {
         println("  ${z.handle()} -> ${z.sovereignty()} (anchor ${z.anchor()})")
 
         when (val c = z.commitment()) {
-            is VeritasCommitmentState.Exists ->
+            is CommitmentState.Exists ->
                 println("    commitment: exists (block ${c.blockHeight}, root ${c.stateRoot.size} bytes)")
-            is VeritasCommitmentState.Empty ->
+            is CommitmentState.Empty ->
                 println("    commitment: empty")
-            is VeritasCommitmentState.Unknown ->
+            is CommitmentState.Unknown ->
                 println("    commitment: unknown")
         }
 
         when (val d = z.delegate()) {
-            is VeritasDelegateState.Exists ->
+            is DelegateState.Exists ->
                 println("    delegate: exists (spk ${d.scriptPubkey.size} bytes)")
-            is VeritasDelegateState.Empty ->
+            is DelegateState.Empty ->
                 println("    delegate: empty")
-            is VeritasDelegateState.Unknown ->
+            is DelegateState.Unknown ->
                 println("    delegate: unknown")
         }
     }
