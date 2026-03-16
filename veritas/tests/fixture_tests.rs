@@ -1,5 +1,5 @@
 use spacedb::subtree::{ProofType};
-use libveritas::cert::{PtrsSubtree, SpacesSubtree};
+use libveritas::cert::{NumsSubtree, SpacesSubtree};
 use libveritas::{ProvableOption, SovereigntyState};
 use libveritas::msg::{QueryContext};
 use libveritas::sname::NameLike;
@@ -31,8 +31,8 @@ fn test_no_delegate_info_provided() {
     let mut runner = FixtureRunner::new(&mut state, fixture);
     let initial_bundle = runner.build_bundle();
     let mut msg = state.message(vec![initial_bundle.clone()]);
-    msg.chain.ptrs = PtrsSubtree(
-        msg.chain.ptrs.0
+    msg.chain.nums = NumsSubtree(
+        msg.chain.nums.0
         .prove(&[[64u8;32]], ProofType::Standard).expect("proving failed")
     );
     let veritas = state.veritas();

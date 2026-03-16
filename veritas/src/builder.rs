@@ -2,7 +2,7 @@ use crate::cert::{Certificate, ChainProofRequestUtils};
 use crate::msg::{ChainProof, Message, OffchainRecords};
 use crate::sname::SName;
 use crate::MessageError;
-use spaces_ptr::ChainProofRequest;
+use spaces_nums::ChainProofRequest;
 
 pub struct DataUpdateRequest {
     pub handle: SName,
@@ -26,7 +26,7 @@ impl MessageBuilder {
 
     /// Returns the chain proof request needed to build the message.
     ///
-    /// Extracts proof keys from certificates (space, registry, commitment, sptr).
+    /// Extracts proof keys from certificates (space, registry, commitment, num ID).
     /// For requests without a certificate, adds the minimum space-level keys.
     /// The provider/fabric expands as needed.
     pub fn chain_proof_request(&self) -> ChainProofRequest {

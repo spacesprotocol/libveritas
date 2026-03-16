@@ -10,12 +10,12 @@ use spaces_protocol::bitcoin::secp256k1::{self, XOnlyPublicKey};
 use spaces_protocol::bitcoin::{ScriptBuf};
 use spaces_protocol::constants::SPACES_SIGNED_MSG_PREFIX;
 use spaces_protocol::slabel::SLabel;
-use spaces_ptr::constants::COMMITMENT_FINALITY_INTERVAL;
+use spaces_nums::constants::COMMITMENT_FINALITY_INTERVAL;
 use std::collections::HashSet;
 use std::fmt;
 use std::io::{Read, Write};
 use spacedb::subtree::SubTree;
-use spaces_ptr::RootAnchor;
+use spaces_nums::RootAnchor;
 
 pub mod cert;
 pub mod msg;
@@ -44,7 +44,7 @@ impl VerifiedMessage {
         }
 
         let space = handle.space()?;
-        let bundle = self.message.spaces.iter().find(|b| b.space == space)?;
+        let bundle = self.message.spaces.iter().find(|b| b.subject == space)?;
 
         if handle.is_single_label() {
             return Some(Certificate::new(
@@ -107,7 +107,7 @@ impl<'a> Iterator for CertificateIter<'a> {
                 if let Some(h) = handles.next() {
                     let bundle = self.current_bundle?;
                     let epoch = self.current_epoch?;
-                    let subject = SName::join(&h.name, &bundle.space).ok()?;
+                    let subject = SName::join(&h.name, &bundle.subject).ok()?;
 
                     return Some(Certificate::new(
                         subject,
@@ -137,7 +137,7 @@ impl<'a> Iterator for CertificateIter<'a> {
             self.handles = None;
 
             // Emit root cert if zone exists
-            let root_handle = SName::from_space(&bundle.space).ok()?;
+            let root_handle = SName::from_space(&bundle.subject).ok()?;
             if self.zones.iter().any(|z| z.handle == root_handle) {
                 return Some(Certificate::new(
                     root_handle,
@@ -212,7 +212,7 @@ pub struct Zone {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CommitmentInfo {
     /// The on-chain commitment data.
-    pub onchain: spaces_ptr::Commitment,
+    pub onchain: spaces_nums::Commitment,
     /// Hash of the ZK receipt that proved this commitment (if verified).
     #[serde(
         serialize_with = "serialize_option_hash",
@@ -226,7 +226,7 @@ impl CommitmentInfo {
         let empty_root = SubTree::<Sha256Hasher>::empty()
             .compute_root().expect("valid");
         Self {
-            onchain: spaces_ptr::Commitment {
+            onchain: spaces_nums::Commitment {
                 state_root: empty_root,
                 prev_root: None,
                 rolling_hash: empty_root,
@@ -311,7 +311,7 @@ impl BorshSerialize for CommitmentInfo {
 
 impl BorshDeserialize for CommitmentInfo {
     fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
-        let onchain = spaces_ptr::Commitment::deserialize_reader(reader)?;
+        let onchain = spaces_nums::Commitment::deserialize_reader(reader)?;
         let receipt_hash = Option::<Hash>::deserialize_reader(reader)?;
         Ok(CommitmentInfo { onchain, receipt_hash })
     }
@@ -759,7 +759,7 @@ impl Veritas {
         chain: &msg::ChainProof,
         bundle: msg::Bundle,
     ) -> Result<(Vec<Zone>, Option<msg::Bundle>), MessageError> {
-        let space = bundle.space.clone();
+        let space = bundle.subject.clone();
         let cached_parent = ctx.get_parent_zone(&space);
         let mut extracted = self.extract_parent_zone(chain, &bundle)?;
 
@@ -802,7 +802,7 @@ impl Veritas {
                 // Nothing left to verify - return bundle only if root was wanted
                 let verified_bundle = if wants_root {
                     Some(msg::Bundle {
-                        space,
+                        subject: space,
                         receipt: if receipt_verified { bundle.receipt } else { None },
                         epochs: vec![],
                         records: bundle.records,
@@ -837,8 +837,8 @@ impl Veritas {
             let sovereignty = if epoch.tree.0.is_empty() {
                 SovereigntyState::Dependent
             } else {
-                let onchain = chain.ptrs.find_commitment(&space, root)
-                    .map_err(|e| MessageError::PtrsProofMalformed { reason: e.to_string() })?
+                let onchain = chain.nums.find_commitment(&space, root)
+                    .map_err(|e| MessageError::NumsProofMalformed { reason: e.to_string() })?
                     .ok_or_else(|| MessageError::CommitmentNotFound {
                         space: space.to_string(),
                         root,
@@ -873,7 +873,7 @@ impl Veritas {
                     }
                     verify_temporary_handle(chain.anchor.height, &handle, &subject, &epoch.tree, target_zone)?
                 } else {
-                    verify_final_handle(chain.anchor.height, &handle, &subject, &epoch.tree, &chain.ptrs, sovereignty)?
+                    verify_final_handle(chain.anchor.height, &handle, &subject, &epoch.tree, &chain.nums, sovereignty)?
                 };
 
                 push_best_zone(ctx, &mut zones, zone);
@@ -891,7 +891,7 @@ impl Veritas {
         // Build verified bundle if anything was verified
         let verified_bundle = if wants_root || !verified_epochs.is_empty() {
             Some(msg::Bundle {
-                space,
+                subject: space,
                 receipt: if receipt_verified { bundle.receipt } else { None },
                 epochs: verified_epochs,
                 records: bundle.records,
@@ -957,18 +957,18 @@ impl Veritas {
             });
         }
 
-        if let Some(expected) = anchor.ptrs_root {
-            let ptrs_root = msg.chain.ptrs
+        if let Some(expected) = anchor.nums_root {
+            let nums_root = msg.chain.nums
                 .compute_root()
-                .map_err(|_| MessageError::PtrsRootMismatch {
+                .map_err(|_| MessageError::NumsRootMismatch {
                     expected: Some(expected),
                     got: [0u8; 32],
                 })?;
 
-            if ptrs_root != expected {
-                return Err(MessageError::PtrsRootMismatch {
+            if nums_root != expected {
+                return Err(MessageError::NumsRootMismatch {
                     expected: Some(expected),
-                    got: ptrs_root,
+                    got: nums_root,
                 });
             }
         }
@@ -980,9 +980,9 @@ impl Veritas {
         use std::collections::HashSet;
         let mut seen: HashSet<&[u8]> = HashSet::new();
         for bundle in &msg.spaces {
-            if !seen.insert(bundle.space.as_ref()) {
+            if !seen.insert(bundle.subject.as_ref()) {
                 return Err(MessageError::DuplicateSpace {
-                    space: bundle.space.to_string(),
+                    space: bundle.subject.to_string(),
                 });
             }
         }
@@ -995,18 +995,18 @@ impl Veritas {
 
     /// Extract parent zone from chain proofs and set sovereignty based on commitment finality.
     fn extract_parent_zone(&self, chain: &msg::ChainProof, bundle: &msg::Bundle) -> Result<Option<Zone>, MessageError> {
-        if bundle.space.is_numeric() {
-            let Some(ptrout) = chain.ptrs
-                .find_numeric(&bundle.space.clone().try_into().expect("numeric"))
+        if bundle.subject.is_numeric() {
+            let Some(numout) = chain.nums
+                .find_numeric(&bundle.subject.clone().try_into().expect("numeric"))
                 .ok().flatten() else {
-                return Err(MessageError::NumericNotFound { numeric: bundle.space.to_string() })
+                return Err(MessageError::NumericNotFound { numeric: bundle.subject.to_string() })
             };
 
-            let handle = SName::from_space(&bundle.space)
-                .map_err(|_| MessageError::InvalidSubject { subject: bundle.space.to_string() })?;
+            let handle = SName::from_space(&bundle.subject)
+                .map_err(|_| MessageError::InvalidSubject { subject: bundle.subject.to_string() })?;
             let mut verified_records = None;
             if let Some(offchain) = &bundle.records {
-                offchain.verify(&ptrout.script_pubkey).map_err(|e| MessageError::RecordsInvalid {
+                offchain.verify(&numout.script_pubkey).map_err(|e| MessageError::RecordsInvalid {
                     handle: handle.to_string(),
                     reason: e.to_string(),
                 })?;
@@ -1016,8 +1016,8 @@ impl Veritas {
                 anchor: chain.anchor.height,
                 sovereignty: SovereigntyState::Sovereign,
                 handle,
-                script_pubkey: ptrout.script_pubkey,
-                fallback_records: ptrout.sptr.data
+                script_pubkey: numout.script_pubkey,
+                fallback_records: numout.num.data
                     .filter(|d| !d.is_empty())
                     .map(|d| sip7::RecordSet::new(d.to_vec())),
                 records: verified_records,
@@ -1027,11 +1027,11 @@ impl Veritas {
             return Ok(Some(z));
         }
 
-        let Some(spaceout) = chain.spaces.find_space(&bundle.space) else {
-            return Err(MessageError::SpaceNotFound { space: bundle.space.to_string() })
+        let Some(spaceout) = chain.spaces.find_space(&bundle.subject) else {
+            return Err(MessageError::SpaceNotFound { space: bundle.subject.to_string() })
         };
-        let handle = SName::from_space(&bundle.space)
-            .map_err(|_| MessageError::InvalidSubject { subject: bundle.space.to_string() })?;
+        let handle = SName::from_space(&bundle.subject)
+            .map_err(|_| MessageError::InvalidSubject { subject: bundle.subject.to_string() })?;
         let mut z = Zone {
             anchor: chain.anchor.height,
             sovereignty: SovereigntyState::Sovereign,
@@ -1043,7 +1043,7 @@ impl Veritas {
             commitment: ProvableOption::Unknown,
         };
         let Some(space) = spaceout.space else {
-            return Err(MessageError::SpaceNotFound { space: bundle.space.to_string() });
+            return Err(MessageError::SpaceNotFound { space: bundle.subject.to_string() });
         };
 
         z.fallback_records = space.data()
@@ -1060,7 +1060,7 @@ impl Veritas {
         }
 
         // Extract delegate info
-        if let Ok(delegate) = chain.ptrs.find_sptr(&z.script_pubkey) {
+        if let Ok(delegate) = chain.nums.find_num(&z.script_pubkey) {
             match delegate {
                 None => z.delegate = ProvableOption::Empty,
                 Some(delegate) => {
@@ -1076,7 +1076,7 @@ impl Veritas {
                     z.delegate = ProvableOption::Exists {
                         value: Delegate {
                             script_pubkey: delegate.script_pubkey,
-                            fallback_records: delegate.sptr.data
+                            fallback_records: delegate.num.data
                                 .filter(|d| !d.is_empty())
                                 .map(|d| sip7::RecordSet::new(d.to_vec())),
                             records: delegate_records,
@@ -1087,11 +1087,11 @@ impl Veritas {
         }
 
         // Extract commitment and set sovereignty
-        if let Ok(root) = chain.ptrs.get_latest_commitment_root(&bundle.space) {
+        if let Ok(root) = chain.nums.get_latest_commitment_root(&bundle.subject) {
             match root {
                 None => z.commitment = ProvableOption::Empty,
                 Some(root) => {
-                    let commitment = chain.ptrs.find_commitment(&bundle.space, root);
+                    let commitment = chain.nums.find_commitment(&bundle.subject, root);
                     if let Ok(Some(commitment)) = commitment {
                         z.commitment = ProvableOption::Exists {
                             value: CommitmentInfo {
@@ -1173,7 +1173,7 @@ fn verify_final_handle(
     handle: &msg::Handle,
     subject: &SName,
     epoch_tree: &cert::HandleSubtree,
-    ptrs: &cert::PtrsSubtree,
+    nums: &cert::NumsSubtree,
     sovereignty: SovereigntyState,
 ) -> Result<Zone, MessageError> {
     if epoch_tree.0.is_empty() {
@@ -1192,14 +1192,14 @@ fn verify_final_handle(
     }
 
     // Key rotation lookup
-    let ptrout = ptrs
-        .find_sptr(&handle.genesis_spk)
-        .map_err(|e| MessageError::PtrsProofMalformed { reason: e.to_string() })?;
+    let numout = nums
+        .find_num(&handle.genesis_spk)
+        .map_err(|e| MessageError::NumsProofMalformed { reason: e.to_string() })?;
 
-    let (spk, onchain_data) = match ptrout {
-        Some(ptrout) => (
-            ptrout.script_pubkey,
-            ptrout.sptr.data
+    let (spk, onchain_data) = match numout {
+        Some(numout) => (
+            numout.script_pubkey,
+            numout.num.data
                 .filter(|d| !d.is_empty())
                 .map(|d| sip7::RecordSet::new(d.to_vec())),
         ),
@@ -1250,13 +1250,13 @@ pub enum MessageError {
     ReceiptPolicyMismatch { space: String },
     /// Spaces proof root doesn't match anchor
     SpacesRootMismatch { expected: Hash, got: Hash },
-    /// Ptrs proof root doesn't match anchor
-    PtrsRootMismatch { expected: Option<Hash>, got: Hash },
+    /// Nums proof root doesn't match anchor
+    NumsRootMismatch { expected: Option<Hash>, got: Hash },
     /// Space not found in spaces proof
     SpaceNotFound { space: String },
-    /// Numeric space not found in ptrs proof
+    /// Numeric space not found in nums proof
     NumericNotFound { numeric: String },
-    /// Commitment not found in ptrs proof
+    /// Commitment not found in nums proof
     CommitmentNotFound { space: String, root: Hash },
     /// Receipt required but not provided
     ReceiptRequired { space: String },
@@ -1284,8 +1284,8 @@ pub enum MessageError {
     FinalCertRequiresTree { handle: String },
     /// Handle not found in handle tree
     HandleNotFound { handle: String },
-    /// Ptrs proof is malformed
-    PtrsProofMalformed { reason: String },
+    /// Nums proof is malformed
+    NumsProofMalformed { reason: String },
     /// ZK receipt verification failed
     ReceiptInvalid { space: String, reason: String },
     /// On-chain commitment doesn't match receipt
@@ -1330,10 +1330,10 @@ impl fmt::Display for MessageError {
                     hex::encode(expected), hex::encode(got)
                 )
             }
-            Self::PtrsRootMismatch { expected, got } => {
+            Self::NumsRootMismatch { expected, got } => {
                 write!(
                     f,
-                    "ptrs root mismatch: expected {}, got {}",
+                    "nums root mismatch: expected {}, got {}",
                     expected.map(hex::encode).unwrap_or_else(|| "none".into()),
                     hex::encode(got)
                 )
@@ -1389,8 +1389,8 @@ impl fmt::Display for MessageError {
             Self::HandleNotFound { handle } => {
                 write!(f, "handle {} not found", handle)
             }
-            Self::PtrsProofMalformed { reason } => {
-                write!(f, "ptrs proof malformed: {}", reason)
+            Self::NumsProofMalformed { reason } => {
+                write!(f, "nums proof malformed: {}", reason)
             }
             Self::ReceiptInvalid { space, reason } => {
                 write!(f, "receipt invalid for {}: {}", space, reason)
@@ -1485,10 +1485,10 @@ where
 }
 
 
-fn verify_zk_journal_matches_onchain(space: &SLabel, zk: &libveritas_zk::guest::Commitment, onchain: &spaces_ptr::Commitment) -> Result<(), MessageError> {
+fn verify_zk_journal_matches_onchain(space: &SLabel, zk: &libveritas_zk::guest::Commitment, onchain: &spaces_nums::Commitment) -> Result<(), MessageError> {
     let space_str = space.to_string();
     let space_hash = Sha256Hasher::hash(space.as_ref());
-    if zk.space != space_hash {
+    if zk.subject != space_hash {
         return Err(MessageError::ReceiptSpaceMismatch { space: space_str });
     }
     if zk.policy_fold != constants::FOLD_ID || zk.policy_step != constants::STEP_ID {

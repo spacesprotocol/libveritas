@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 use libveritas::builder;
 use libveritas::msg;
 use libveritas::sname::SName;
-use spaces_ptr::RootAnchor;
+use spaces_nums::RootAnchor;
 use std::str::FromStr;
 
 uniffi::setup_scaffolding!();
@@ -272,7 +272,7 @@ impl Message {
 
     /// Update records on this message.
     ///
-    /// - `name`: handle string (e.g. "alice@bitcoin", "@bitcoin", "#12-12")
+    /// - `name`: handle string (e.g. "alice@bitcoin", "@bitcoin", "#12-12-0")
     /// - `records`: borsh-encoded OffchainRecords (optional)
     /// - `delegate_records`: borsh-encoded OffchainRecords (optional)
     pub fn update(&self, updates: Vec<DataUpdateEntry>) -> Result<(), VeritasError> {

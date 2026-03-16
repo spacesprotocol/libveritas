@@ -6,7 +6,7 @@ fn main() {
     let (c1, c2): (Commitment, Commitment) = env::read();
 
     assert_eq!(c1.final_root, c2.initial_root, "roots must match");
-    assert_eq!(c1.space, c2.space, "space must match");
+    assert_eq!(c1.subject, c2.subject, "subject must match");
     assert_eq!(c1.policy_step, c2.policy_step, "policy step must match");
     assert_eq!(c1.policy_fold, c2.policy_fold, "policy fold must match");
 
@@ -25,7 +25,7 @@ fn main() {
     let rolling_hash = Impl::hash_bytes(&hash_msg).as_bytes().try_into().expect("works");
 
     env::commit(&Commitment {
-        space: c1.space,
+        subject: c1.subject,
         initial_root: c1.initial_root,
         final_root: c2.final_root,
         rolling_hash,

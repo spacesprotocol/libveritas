@@ -7,7 +7,7 @@ use crate::BatchReader;
 
 #[derive(Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct Commitment {
-    pub space: Hash,
+    pub subject: Hash,
     pub policy_step: [u32; 8],
     pub policy_fold: [u32; 8],
     pub initial_root: Hash,
@@ -60,7 +60,7 @@ pub fn run(subtree: Vec<u8>, input: Vec<u8>, policy_step: [u32; 8], policy_fold:
     let final_root = subtree.compute_root().unwrap();
 
     Ok(Commitment {
-        space: reader.space_hash().try_into().expect("space hash error"),
+        subject: reader.space_hash().try_into().expect("space hash error"),
         initial_root,
         final_root,
         rolling_hash: {

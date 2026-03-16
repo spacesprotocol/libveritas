@@ -9,7 +9,7 @@ elf = []
 [dependencies]
 spacedb = { workspace = true }
 spaces_protocol = {workspace = true}
-spaces_ptr = {workspace = true}
+spaces_nums = {workspace = true}
 sip7 = {workspace = true}
 serde = { version = "1.0", features = ["derive"] }
 base64 = "0.22"

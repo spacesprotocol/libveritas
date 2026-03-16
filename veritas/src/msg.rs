@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 
 use crate::{MessageError, Zone};
-use crate::cert::{Certificate, HandleSubtree, PtrsSubtree, Signature, SpacesSubtree, Witness};
+use crate::cert::{Certificate, HandleSubtree, NumsSubtree, Signature, SpacesSubtree, Witness};
 use crate::sname::{Label, NameLike, SName};
 
 /// Context for a verification query.
@@ -114,7 +114,7 @@ impl Message {
 
         let Some(bundle) = self.spaces
             .iter_mut()
-            .find(|b| b.space == space) else {
+            .find(|b| b.subject == space) else {
             return;
         };
 
@@ -161,7 +161,7 @@ impl Message {
             bundles.insert(
                 label.clone(),
                 Bundle {
-                    space: label,
+                    subject: label,
                     receipt: match root.witness {
                         Witness::Root { receipt } => receipt,
                         _ => continue,
@@ -220,28 +220,28 @@ pub struct ChainProof {
     pub anchor: ChainAnchor,
     /// Proof from the spaces tree (space existence, ownership).
     pub spaces: SpacesSubtree,
-    /// Proof from the ptrs tree (delegation, commitments, key rotation).
-    pub ptrs: PtrsSubtree,
+    /// Proof from the nums tree (nums, delegation, commitments, key rotation).
+    pub nums: NumsSubtree,
 }
 
 /// Data for a single space, including its tip receipt and handle epochs.
 #[derive(Clone)]
 pub struct Bundle {
-    /// The space this record is for (e.g., "@bitcoin").
-    pub space: SLabel,
+    /// The subject this bundle is for (e.g., "@bitcoin", "#222-2-2").
+    pub subject: SLabel,
     /// ZK receipt proving the tip epoch. `None` if the tip is finalized
     /// and the verifier's cache covers it, or for first-commitment spaces.
     /// When present, the journal decodes to the tip's final_root.
     pub receipt: Option<Receipt>,
+    /// Signed records from the space owner.
+    pub records: Option<OffchainRecords>,
+    /// Signed records from the delegate.
+    pub delegate_records: Option<OffchainRecords>,
     /// Handle epochs for this space. Each epoch corresponds to a committed
     /// state root. The tip epoch (if handles are being proven against it)
     /// should have `tree.compute_root()` matching the receipt's final_root
     /// or the on-chain tip from the chain proof.
     pub epochs: Vec<Epoch>,
-    /// Signed records from the space owner.
-    pub records: Option<OffchainRecords>,
-    /// Signed records from the delegate.
-    pub delegate_records: Option<OffchainRecords>,
 }
 
 impl Bundle {
@@ -386,7 +386,7 @@ impl BorshSerialize for ChainProof {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         BorshSerialize::serialize(&self.anchor, writer)?;
         BorshSerialize::serialize(&self.spaces, writer)?;
-        BorshSerialize::serialize(&self.ptrs, writer)
+        BorshSerialize::serialize(&self.nums, writer)
     }
 }
 
@@ -394,14 +394,14 @@ impl BorshDeserialize for ChainProof {
     fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
         let anchor = ChainAnchor::deserialize_reader(reader)?;
         let spaces = SpacesSubtree::deserialize_reader(reader)?;
-        let ptrs = PtrsSubtree::deserialize_reader(reader)?;
-        Ok(ChainProof { anchor, spaces, ptrs })
+        let nums = NumsSubtree::deserialize_reader(reader)?;
+        Ok(ChainProof { anchor, spaces, nums })
     }
 }
 
 impl BorshSerialize for Bundle {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        BorshSerialize::serialize(&self.space, writer)?;
+        BorshSerialize::serialize(&self.subject, writer)?;
         BorshSerialize::serialize(&self.receipt, writer)?;
         BorshSerialize::serialize(&self.epochs, writer)?;
         BorshSerialize::serialize(&self.records, writer)?;
@@ -417,7 +417,7 @@ impl BorshDeserialize for Bundle {
         let records = Option::<OffchainRecords>::deserialize_reader(reader)?;
         let delegate_records = Option::<OffchainRecords>::deserialize_reader(reader)?;
         Ok(Bundle {
-            space,
+            subject: space,
             receipt,
             epochs,
             records,

@@ -10,8 +10,8 @@ use spaces_protocol::bitcoin::ScriptBuf;
 use spaces_protocol::hasher::{KeyHasher, OutpointKey};
 use spaces_protocol::slabel::SLabel;
 use spaces_protocol::SpaceOut;
-use spaces_ptr::{snumeric::SNumeric, ChainProofRequest, Commitment, CommitmentKey, NumericKey, PtrKeyKind, PtrOut, RegistryKey};
-use spaces_ptr::sptr::Sptr;
+use spaces_nums::{snumeric::SNumeric, ChainProofRequest, Commitment, CommitmentKey, NumericKey, NumKeyKind, NumOut, CommitmentTipKey};
+use spaces_nums::num_id::NumId;
 use crate::sname::{Label, SName};
 
 /// Current certificate version.
@@ -24,7 +24,7 @@ pub const CERTIFICATE_VERSION: u8 = 2;
 /// - Handle subtree proofs (from the operator's off-chain tree)
 /// - Signatures and identity information
 ///
-/// On-chain proofs (spaces tree, ptrs tree) are always recoverable from any
+/// On-chain proofs (spaces tree, nums tree) are always recoverable from any
 /// spaced client and are not stored in the certificate. They are assembled
 /// into a [`CertificateBundle`](crate::bundle::CertificateBundle) for verification.
 ///
@@ -119,9 +119,9 @@ impl Certificate {
         }
     }
 
-    /// Returns the Sptr derived from the genesis script pubkey if this is a leaf certificate.
-    pub fn sptr(&self) -> Option<Sptr> {
-        self.genesis_spk().map(|spk| Sptr::from_spk::<KeyHash>(spk.clone()))
+    /// Returns the NumId derived from the genesis script pubkey if this is a leaf certificate.
+    pub fn num_id(&self) -> Option<NumId> {
+        self.genesis_spk().map(|spk| NumId::from_spk::<KeyHash>(spk.clone()))
     }
 }
 
@@ -133,7 +133,7 @@ pub trait ChainProofRequestUtils {
 
     fn add_space(&mut self, space: SLabel);
 
-    fn add_sptr(&mut self, sptr: Sptr);
+    fn add_num_id(&mut self, num_id: NumId);
 
     fn add_numeric(&mut self, numeric: SNumeric);
 }
@@ -151,9 +151,9 @@ impl ChainProofRequestUtils for ChainProofRequest {
         }
 
         // Registry key for commitment tip
-        let registry_key = RegistryKey::from_slabel::<KeyHash>(&space);
-        if !self.ptrs_keys.iter().any(|k| matches!(k, PtrKeyKind::Registry(r) if *r == registry_key)) {
-            self.ptrs_keys.push(PtrKeyKind::Registry(registry_key));
+        let registry_key = CommitmentTipKey::from_slabel::<KeyHash>(&space);
+        if !self.nums.iter().any(|k| matches!(k, NumKeyKind::CommitmentTip(r) if *r == registry_key)) {
+            self.nums.push(NumKeyKind::CommitmentTip(registry_key));
         }
 
         match &cert.witness {
@@ -162,8 +162,8 @@ impl ChainProofRequestUtils for ChainProofRequest {
                 if let Some(receipt) = receipt {
                     if let Ok(zkc) = receipt.journal.decode::<libveritas_zk::guest::Commitment>() {
                         let ck = CommitmentKey::new::<KeyHash>(&space, zkc.final_root);
-                        if !self.ptrs_keys.iter().any(|k| matches!(k, PtrKeyKind::Commitment(c) if *c == ck)) {
-                            self.ptrs_keys.push(PtrKeyKind::Commitment(ck));
+                        if !self.nums.iter().any(|k| matches!(k, NumKeyKind::Commitment(c) if *c == ck)) {
+                            self.nums.push(NumKeyKind::Commitment(ck));
                         }
                     }
                 }
@@ -173,16 +173,16 @@ impl ChainProofRequestUtils for ChainProofRequest {
                 if !handles.0.is_empty() {
                     if let Ok(root) = handles.compute_root() {
                         let ck = CommitmentKey::new::<KeyHash>(&space, root);
-                        if !self.ptrs_keys.iter().any(|k| matches!(k, PtrKeyKind::Commitment(c) if *c == ck)) {
-                            self.ptrs_keys.push(PtrKeyKind::Commitment(ck));
+                        if !self.nums.iter().any(|k| matches!(k, NumKeyKind::Commitment(c) if *c == ck)) {
+                            self.nums.push(NumKeyKind::Commitment(ck));
                         }
                     }
                 }
 
-                // Sptr key for key rotation lookup
-                let sptr = Sptr::from_spk::<KeyHash>(genesis_spk.clone());
-                if !self.ptrs_keys.iter().any(|k| matches!(k, PtrKeyKind::Sptr(s) if *s == sptr)) {
-                    self.ptrs_keys.push(PtrKeyKind::Sptr(sptr));
+                // NumId key for key rotation lookup
+                let num_id = NumId::from_spk::<KeyHash>(genesis_spk.clone());
+                if !self.nums.iter().any(|k| matches!(k, NumKeyKind::Id(s) if *s == num_id)) {
+                    self.nums.push(NumKeyKind::Id(num_id));
                 }
             }
         }
@@ -192,7 +192,7 @@ impl ChainProofRequestUtils for ChainProofRequest {
      fn from_certificates<'a>(certs: impl Iterator<Item = &'a Certificate>) -> Self {
         let mut req = Self {
             spaces: vec![],
-            ptrs_keys: vec![],
+            nums: vec![],
         };
         for cert in certs {
             req.add(cert);
@@ -202,7 +202,7 @@ impl ChainProofRequestUtils for ChainProofRequest {
 
     /// Add keys from a handle subtree for a space.
     ///
-    /// Iterates the subtree to extract genesis_spk values and compute sptr keys.
+    /// Iterates the subtree to extract genesis_spk values and compute num ID keys.
     fn add_subtree(&mut self, space: &SLabel, handles: &HandleSubtree) {
         // Space proof
         if !self.spaces.iter().any(|s| s == space) {
@@ -210,9 +210,9 @@ impl ChainProofRequestUtils for ChainProofRequest {
         }
 
         // Registry key for commitment tip
-        let registry_key = RegistryKey::from_slabel::<KeyHash>(space);
-        if !self.ptrs_keys.iter().any(|k| matches!(k, PtrKeyKind::Registry(r) if *r == registry_key)) {
-            self.ptrs_keys.push(PtrKeyKind::Registry(registry_key));
+        let registry_key = CommitmentTipKey::from_slabel::<KeyHash>(space);
+        if !self.nums.iter().any(|k| matches!(k, NumKeyKind::CommitmentTip(r) if *r == registry_key)) {
+            self.nums.push(NumKeyKind::CommitmentTip(registry_key));
         }
 
         if handles.0.is_empty() {
@@ -222,17 +222,17 @@ impl ChainProofRequestUtils for ChainProofRequest {
         // Commitment key for subtree root
         if let Ok(root) = handles.compute_root() {
             let ck = CommitmentKey::new::<KeyHash>(space, root);
-            if !self.ptrs_keys.iter().any(|k| matches!(k, PtrKeyKind::Commitment(c) if *c == ck)) {
-                self.ptrs_keys.push(PtrKeyKind::Commitment(ck));
+            if !self.nums.iter().any(|k| matches!(k, NumKeyKind::Commitment(c) if *c == ck)) {
+                self.nums.push(NumKeyKind::Commitment(ck));
             }
         }
 
-        // Sptr keys from all handles in subtree
+        // NumId keys from all handles in subtree
         for (_, genesis_spk_bytes) in handles.0.iter() {
             let genesis_spk = ScriptBuf::from_bytes(genesis_spk_bytes.to_vec());
-            let sptr = Sptr::from_spk::<KeyHash>(genesis_spk);
-            if !self.ptrs_keys.iter().any(|k| matches!(k, PtrKeyKind::Sptr(s) if *s == sptr)) {
-                self.ptrs_keys.push(PtrKeyKind::Sptr(sptr));
+            let num_id = NumId::from_spk::<KeyHash>(genesis_spk);
+            if !self.nums.iter().any(|k| matches!(k, NumKeyKind::Id(s) if *s == num_id)) {
+                self.nums.push(NumKeyKind::Id(num_id));
             }
         }
     }
@@ -240,19 +240,19 @@ impl ChainProofRequestUtils for ChainProofRequest {
     fn add_space(&mut self, space: SLabel) {
         if space.is_numeric() {
             let numeric : SNumeric = space.try_into().expect("valid numeric");
-            self.ptrs_keys.push(PtrKeyKind::Numeric(numeric));
+            self.nums.push(NumKeyKind::Num(numeric));
             return;
         }
 
         self.spaces.push(space);
     }
 
-    fn add_sptr(&mut self, sptr: Sptr) {
-        self.ptrs_keys.push(PtrKeyKind::Sptr(sptr));
+    fn add_num_id(&mut self, num_id: NumId) {
+        self.nums.push(NumKeyKind::Id(num_id));
     }
 
     fn add_numeric(&mut self, numeric: SNumeric) {
-       self.ptrs_keys.push(PtrKeyKind::Numeric(numeric));
+       self.nums.push(NumKeyKind::Num(numeric));
     }
 }
 
@@ -284,7 +284,7 @@ impl<'de> Deserialize<'de> for Signature {
 #[derive(Clone, BorshSerialize, BorshDeserialize)]
 pub struct SpacesSubtree(pub SubTree<Sha256Hasher>);
 #[derive(Clone, BorshSerialize, BorshDeserialize)]
-pub struct PtrsSubtree(pub SubTree<Sha256Hasher>);
+pub struct NumsSubtree(pub SubTree<Sha256Hasher>);
 #[derive(Clone, BorshSerialize, BorshDeserialize)]
 pub struct HandleSubtree(pub SubTree<Sha256Hasher>);
 
@@ -294,8 +294,8 @@ pub enum SpacesValue {
     Unknown(Vec<u8>),
 }
 
-pub enum PtrsValue {
-    UTXO(PtrOut),
+pub enum NumsValue {
+    UTXO(NumOut),
     CommitmentTip(Hash),
     Commitment(Commitment),
     Unknown(Vec<u8>),
@@ -392,7 +392,7 @@ impl SpacesSubtree {
     }
 }
 
-impl PtrsSubtree {
+impl NumsSubtree {
     pub fn empty() -> Self {
         Self(SubTree::empty())
     }
@@ -402,8 +402,8 @@ impl PtrsSubtree {
         Ok(Self(subtree))
     }
 
-    pub fn iter(&self) -> PtrsIter<'_> {
-        PtrsIter {
+    pub fn iter(&self) -> NumsIter<'_> {
+        NumsIter {
             inner: self.0.iter(),
         }
     }
@@ -417,17 +417,17 @@ impl PtrsSubtree {
     }
 
     pub fn has_commitments(&self, space: &SLabel) -> Result<bool, SubtreeError> {
-        let key: Hash = RegistryKey::from_slabel::<KeyHash>(space).into();
+        let key: Hash = CommitmentTipKey::from_slabel::<KeyHash>(space).into();
         Ok(self.0.contains(&key)?)
     }
 
     pub fn get_latest_commitment_root(&self, space: &SLabel) -> Result<Option<Hash>, SubtreeError> {
-        let key: Hash = RegistryKey::from_slabel::<KeyHash>(space).into();
+        let key: Hash = CommitmentTipKey::from_slabel::<KeyHash>(space).into();
 
         // Find the commitment tip entry
         for (k, value) in self.iter() {
             if k == key {
-                if let PtrsValue::CommitmentTip(tip_root) = value {
+                if let NumsValue::CommitmentTip(tip_root) = value {
                     return Ok(Some(tip_root));
                 }
             }
@@ -451,12 +451,12 @@ impl PtrsSubtree {
     /// - `Ok(false)` if the commitment tip exists but doesn't match
     /// - `Err` if the tip cannot be proven
     pub fn is_latest_commitment(&self, space: &SLabel, state_root: Hash) -> Result<bool, SubtreeError> {
-        let key: Hash = RegistryKey::from_slabel::<KeyHash>(space).into();
+        let key: Hash = CommitmentTipKey::from_slabel::<KeyHash>(space).into();
 
         // Find the commitment tip entry
         for (k, value) in self.iter() {
             if k == key {
-                if let PtrsValue::CommitmentTip(tip_root) = value {
+                if let NumsValue::CommitmentTip(tip_root) = value {
                     return Ok(tip_root == state_root);
                 }
             }
@@ -474,27 +474,27 @@ impl PtrsSubtree {
         }
     }
 
-    /// Finds a PtrOut by its numeric.
+    /// Finds a NumOut by its numeric.
     ///
     /// Returns:
-    /// - `Ok(Some(ptrout))` if found
+    /// - `Ok(Some(numout))` if found
     /// - `Ok(None)` if provably not in tree
     /// - `Err` if proof is malformed or incomplete
-    pub fn find_numeric(&self, numeric: &SNumeric) -> Result<Option<PtrOut>, SubtreeError> {
-        // Search for UTXO containing this sptr. We iterate rather than doing a direct
-        // key lookup to avoid requiring an additional sptr->outpoint leaf in the proof.
+    pub fn find_numeric(&self, numeric: &SNumeric) -> Result<Option<NumOut>, SubtreeError> {
+        // Search for UTXO containing this numeric. We iterate rather than doing a direct
+        // key lookup to avoid requiring an additional num->outpoint leaf in the proof.
         for (_, value) in self.iter() {
-            if let PtrsValue::UTXO(ptrout) = value {
-                if &ptrout.sptr.numeric == numeric {
-                    return Ok(Some(ptrout));
+            if let NumsValue::UTXO(numout) = value {
+                if &numout.num.name == numeric {
+                    return Ok(Some(numout));
                 }
             }
         }
 
         let numeric : Hash = NumericKey::from_numeric::<KeyHash>(numeric).into();
 
-        // Not found in UTXOs - verify the sptr provably doesn't exist.
-        // If contains() returns true, the proof is incomplete (has sptr key but missing UTXO).
+        // Not found in UTXOs - verify the num provably doesn't exist.
+        // If contains() returns true, the proof is incomplete (has key but missing UTXO).
         if self.0.contains(&numeric)? {
             return Err(SubtreeError::IncompleteProof {
                 reason: "numeric key present but UTXO leaf missing".to_string(),
@@ -504,30 +504,30 @@ impl PtrsSubtree {
         Ok(None)
     }
 
-    /// Finds a PtrOut by its genesis SPK.
+    /// Finds a NumOut by its genesis SPK.
     ///
     /// Returns:
-    /// - `Ok(Some(ptrout))` if found
+    /// - `Ok(Some(numout))` if found
     /// - `Ok(None)` if provably not in tree
     /// - `Err` if proof is malformed or incomplete
-    pub fn find_sptr(&self, genesis_spk: &ScriptBuf) -> Result<Option<PtrOut>, SubtreeError> {
-        let sptr = Sptr::from_spk::<KeyHash>(genesis_spk.clone());
+    pub fn find_num(&self, genesis_spk: &ScriptBuf) -> Result<Option<NumOut>, SubtreeError> {
+        let num_id = NumId::from_spk::<KeyHash>(genesis_spk.clone());
 
-        // Search for UTXO containing this sptr. We iterate rather than doing a direct
-        // key lookup to avoid requiring an additional sptr->outpoint leaf in the proof.
+        // Search for UTXO containing this num ID. We iterate rather than doing a direct
+        // key lookup to avoid requiring an additional num->outpoint leaf in the proof.
         for (_, value) in self.iter() {
-            if let PtrsValue::UTXO(ptrout) = value {
-                if ptrout.sptr.id == sptr {
-                    return Ok(Some(ptrout));
+            if let NumsValue::UTXO(numout) = value {
+                if numout.num.id == num_id {
+                    return Ok(Some(numout));
                 }
             }
         }
 
-        // Not found in UTXOs - verify the sptr provably doesn't exist.
-        // If contains() returns true, the proof is incomplete (has sptr key but missing UTXO).
-        if self.0.contains(&sptr.to_bytes())? {
+        // Not found in UTXOs - verify the num ID provably doesn't exist.
+        // If contains() returns true, the proof is incomplete (has key but missing UTXO).
+        if self.0.contains(&num_id.to_bytes())? {
             return Err(SubtreeError::IncompleteProof {
-                reason: "sptr key present but UTXO leaf missing".to_string(),
+                reason: "num ID key present but UTXO leaf missing".to_string(),
             });
         }
 
@@ -550,9 +550,9 @@ impl PtrsSubtree {
         Ok(Some(v))
     }
 
-    /// Whether the subtree provably contains an sptr
-    pub fn contains_sptr(&self, sptr: &Sptr) -> Result<bool, SubtreeError> {
-        Ok(self.0.contains(&sptr.to_bytes())?)
+    /// Whether the subtree provably contains a num ID.
+    pub fn contains_num_id(&self, num_id: &NumId) -> Result<bool, SubtreeError> {
+        Ok(self.0.contains(&num_id.to_bytes())?)
     }
 }
 
@@ -560,35 +560,35 @@ pub struct SpacesIter<'a> {
     inner: SubtreeIter<'a>,
 }
 
-pub struct PtrsIter<'a> {
+pub struct NumsIter<'a> {
     inner: SubtreeIter<'a>,
 }
 
-impl Iterator for PtrsIter<'_> {
-    type Item = (Hash, PtrsValue);
+impl Iterator for NumsIter<'_> {
+    type Item = (Hash, NumsValue);
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next().map(|(k, v)| {
-            // PTR proof: Try to decode value as different PTR types
+            // Nums proof: Try to decode value as different Nums types
 
-            // Try PtrOutpointKey → PtrOut
-            if let Ok(ptrout) = borsh::from_slice::<PtrOut>(v.as_slice()) {
-                return (*k, PtrsValue::UTXO(ptrout));
+            // Try NumOutpointKey → NumOut
+            if let Ok(numout) = borsh::from_slice::<NumOut>(v.as_slice()) {
+                return (*k, NumsValue::UTXO(numout));
             }
 
             // Try CommitmentKey → Commitment
             if let Ok(c) = borsh::from_slice::<Commitment>(v.as_slice()) {
-                return (*k, PtrsValue::Commitment(c));
+                return (*k, NumsValue::Commitment(c));
             }
 
-            // Try RegistryKey → Hash (root)
+            // Try CommitmentTipKey → Hash (root)
             if v.len() == 32 {
                 if let Ok(root) = borsh::from_slice::<Hash>(v.as_slice()) {
-                    return (*k, PtrsValue::CommitmentTip(root));
+                    return (*k, NumsValue::CommitmentTip(root));
                 }
             }
 
-            (*k, PtrsValue::Unknown(v.clone()))
+            (*k, NumsValue::Unknown(v.clone()))
         })
     }
 }
@@ -625,15 +625,15 @@ impl<'de> Deserialize<'de> for SpacesSubtree {
     }
 }
 
-impl Serialize for PtrsSubtree {
+impl Serialize for NumsSubtree {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serialize_subtree(&self.0, serializer)
     }
 }
 
-impl<'de> Deserialize<'de> for PtrsSubtree {
+impl<'de> Deserialize<'de> for NumsSubtree {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        Ok(PtrsSubtree(deserialize_subtree(deserializer)?))
+        Ok(NumsSubtree(deserialize_subtree(deserializer)?))
     }
 }
 

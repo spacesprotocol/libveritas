@@ -1,8 +1,8 @@
 use spacedb::subtree::SubTree;
-use spaces_ptr::constants::COMMITMENT_FINALITY_INTERVAL;
-use spaces_ptr::RootAnchor;
+use spaces_nums::constants::COMMITMENT_FINALITY_INTERVAL;
+use spaces_nums::RootAnchor;
 use libveritas::{msg, SovereigntyState, Veritas};
-use libveritas::cert::{HandleSubtree, PtrsSubtree, SpacesSubtree};
+use libveritas::cert::{HandleSubtree, NumsSubtree, SpacesSubtree};
 use libveritas::msg::{Bundle, ChainProof};
 use crate::{TestChain, TestDelegatedSpace, TestHandleTree};
 
@@ -177,7 +177,7 @@ impl ChainState {
             chain: ChainProof {
                 anchor: self.chain.current_root_anchor().block,
                 spaces: SpacesSubtree(self.chain.spaces_tree.clone()),
-                ptrs: PtrsSubtree(self.chain.ptrs_tree.clone()),
+                nums: NumsSubtree(self.chain.nums_tree.clone()),
             },
             spaces: bundles,
         }
@@ -208,7 +208,7 @@ impl FixtureRunner {
 
     pub fn build_bundle(&mut self) -> msg::Bundle {
         let mut bundle = msg::Bundle {
-            space: self.space.space.label(),
+            subject: self.space.space.label(),
             receipt: None,
             epochs: vec![],
             records: None,

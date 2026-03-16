@@ -214,7 +214,7 @@ impl Display for SName {
         let last_label = labels.last().unwrap();
         let all_but_last = &labels[..labels.len() - 1];
         if last_label.starts_with('#') {
-            // Numeric space: "alice#12-12" or "#12-12"
+            // Numeric space: "alice#12-12-0" or "#12-12-0"
             write!(f, "{}{}", all_but_last.join("."), last_label)
         } else {
             write!(f, "{}@{}", all_but_last.join("."), last_label)
@@ -250,7 +250,7 @@ impl TryFrom<&str> for SName {
             (sub, space)
         } else if let Some(hash_pos) = value.find('#') {
             let (sub, space) = value.split_at(hash_pos);
-            // space includes '#', e.g. "#12-12"
+            // space includes '#', e.g. "#12-12-0"
             if space.len() <= 1 || space[1..].contains('#') || space.contains('.') {
                 return Err(Error::Malformed);
             }
@@ -582,25 +582,26 @@ mod tests {
 
     #[test]
     fn test_numeric_spaces() {
-        assert!(SName::from_str("#12-12").is_ok());
-        assert!(SName::from_str("alice#12-12").is_ok());
-        assert!(SName::from_str("key.wallet#800000-3").is_ok());
+        assert!(SName::from_str("#12-12-0").is_ok());
+        assert!(SName::from_str("alice#12-12-0").is_ok());
+        assert!(SName::from_str("key.wallet#800000-3-1").is_ok());
 
         // Invalid numeric formats
         assert!(SName::from_str("#").is_err());
-        assert!(SName::from_str("#12-12#3-4").is_err());
+        assert!(SName::from_str("#12-12").is_err());
+        assert!(SName::from_str("#12-12-0#3-4-0").is_err());
 
         // Display format
-        let root = SName::from_str("#12-12").unwrap();
-        assert_eq!(root.to_string(), "#12-12");
+        let root = SName::from_str("#12-12-0").unwrap();
+        assert_eq!(root.to_string(), "#12-12-0");
         assert_eq!(root.label_count(), 1);
 
-        let handle = SName::from_str("alice#12-12").unwrap();
-        assert_eq!(handle.to_string(), "alice#12-12");
+        let handle = SName::from_str("alice#12-12-0").unwrap();
+        assert_eq!(handle.to_string(), "alice#12-12-0");
         assert_eq!(handle.label_count(), 2);
 
-        let deep = SName::from_str("key.wallet#800000-3").unwrap();
-        assert_eq!(deep.to_string(), "key.wallet#800000-3");
+        let deep = SName::from_str("key.wallet#800000-3-1").unwrap();
+        assert_eq!(deep.to_string(), "key.wallet#800000-3-1");
         assert_eq!(deep.label_count(), 3);
 
         // space() and subspace()

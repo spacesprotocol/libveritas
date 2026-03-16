@@ -5,7 +5,7 @@ use libveritas::builder;
 use libveritas::msg;
 use libveritas::sname::SName;
 use serde::Serialize;
-use spaces_ptr::RootAnchor;
+use spaces_nums::RootAnchor;
 
 /// Serialize through JSON to get human-readable serde output
 /// (hex hashes, string names, etc.) as a native JS object.
@@ -515,7 +515,7 @@ impl RecordSet {
 /// ```js
 /// const rs = RecordSet.pack([Record.seq(0), Record.txt("btc", "bc1qtest")]);
 /// const sig = await wallet.signSchnorr(rs.signingId());
-/// const bytes = OffchainRecords.encode(rs, sig);
+/// const bytes = OffchainRecords.from(rs, sig);
 /// ```
 #[wasm_bindgen]
 pub struct OffchainRecords;
@@ -523,7 +523,7 @@ pub struct OffchainRecords;
 #[wasm_bindgen]
 impl OffchainRecords {
     /// Create borsh-encoded OffchainRecords from a RecordSet and 64-byte signature.
-    pub fn encode(record_set: &RecordSet, signature: &[u8]) -> Result<Vec<u8>, JsError> {
+    pub fn from(record_set: &RecordSet, signature: &[u8]) -> Result<Vec<u8>, JsError> {
         let sig: [u8; 64] = signature.try_into()
             .map_err(|_| JsError::new("signature must be 64 bytes"))?;
         let offchain = msg::OffchainRecords::new(

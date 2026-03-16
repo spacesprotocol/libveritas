@@ -12,7 +12,7 @@ use bitcoin::secp256k1::Secp256k1;
 use bitcoin::secp256k1::rand::{self, SeedableRng};
 use bitcoin::{BlockHash, OutPoint, ScriptBuf, Txid};
 use borsh::{BorshDeserialize, BorshSerialize};
-use libveritas::cert::{HandleSubtree, KeyHash, PtrsSubtree, Signature, SpacesSubtree};
+use libveritas::cert::{HandleSubtree, KeyHash, NumsSubtree, Signature, SpacesSubtree};
 use libveritas::msg::{self, ChainProof, Message, OffchainRecords};
 use libveritas::sname::{Label, SName};
 use libveritas::{ProvableOption, SovereigntyState, Veritas, Zone, hash_signable_message};
@@ -23,12 +23,9 @@ use spaces_protocol::constants::{ChainAnchor};
 use spaces_protocol::hasher::{KeyHasher, OutpointKey, SpaceKey};
 use spaces_protocol::slabel::SLabel;
 use spaces_protocol::{Covenant, FullSpaceOut, Space, SpaceOut};
-use spaces_ptr::sptr::Sptr;
-use spaces_ptr::{
-    CommitmentKey, FullPtrOut, Ptr, PtrOut, PtrOutpointKey, RegistryKey, RegistrySptrKey,
-    RootAnchor, rolling_hash,
-};
-use spaces_ptr::snumeric::SNumeric;
+use spaces_nums::num_id::NumId;
+use spaces_nums::{CommitmentKey, FullNumOut, Num, NumOut, NumOutpointKey, CommitmentTipKey, RootAnchor, rolling_hash, DelegatorKey};
+use spaces_nums::snumeric::SNumeric;
 use std::collections::HashMap;
 use std::str::FromStr;
 // ─────────────────────────────────────────────────────────────────────────────
@@ -100,15 +97,15 @@ pub struct TestSpace {
 }
 
 #[derive(Clone)]
-pub struct TestPtr {
-    pub fso: FullPtrOut,
+pub struct TestNum {
+    pub fso: FullNumOut,
     pub keypair: Keypair,
 }
 
 #[derive(Clone)]
 pub struct TestDelegatedSpace {
     pub space: TestSpace,
-    pub ptr: TestPtr,
+    pub ptr: TestNum,
 }
 
 #[derive(Clone)]
@@ -199,9 +196,9 @@ impl TestSpace {
     }
 }
 
-impl TestPtr {
+impl TestNum {
     pub fn new(genesis_spk: ScriptBuf, block_height: u32) -> Self {
-        let sptr = Sptr::from_spk::<KeyHash>(genesis_spk);
+        let id = NumId::from_spk::<KeyHash>(genesis_spk);
 
         let mut rng = rng();
         let mut txid_bytes = [0u8; 32];
@@ -211,13 +208,13 @@ impl TestPtr {
         let n: u32 = rng.r#gen();
         let (script_pubkey, keypair) = gen_p2tr_spk();
 
-        let fso = FullPtrOut {
+        let fso = FullNumOut {
             txid,
-            ptrout: PtrOut {
+            numout: NumOut {
                 n: n as usize,
-                sptr: Ptr {
-                    id: sptr,
-                    numeric: SNumeric::new(0, 0),
+                num: Num {
+                    id,
+                    name: SNumeric::new(0, 0, 0),
                     data: None,
                     last_update: block_height,
                 },
@@ -226,19 +223,19 @@ impl TestPtr {
             },
         };
 
-        TestPtr { fso, keypair }
+        TestNum { fso, keypair }
     }
 
-    pub fn sptr(&self) -> Sptr {
-        self.fso.ptrout.sptr.id.clone()
+    pub fn id(&self) -> NumId {
+        self.fso.numout.num.id.clone()
     }
 
-    pub fn outpoint_key(&self) -> PtrOutpointKey {
-        PtrOutpointKey::from_outpoint::<KeyHash>(self.fso.outpoint())
+    pub fn outpoint_key(&self) -> NumOutpointKey {
+        NumOutpointKey::from_outpoint::<KeyHash>(self.fso.outpoint())
     }
 
-    pub fn ptrout_bytes(&self) -> Vec<u8> {
-        borsh::to_vec(&self.fso.ptrout).expect("valid")
+    pub fn numout_bytes(&self) -> Vec<u8> {
+        borsh::to_vec(&self.fso.numout).expect("valid")
     }
 
     pub fn outpoint_bytes(&self) -> Vec<u8> {
@@ -253,9 +250,9 @@ impl TestPtr {
 #[derive(Clone)]
 pub struct TestChain {
     pub spaces_tree: SubTree<Sha256Hasher>,
-    pub ptrs_tree: SubTree<Sha256Hasher>,
+    pub nums_tree: SubTree<Sha256Hasher>,
     pub spaces: HashMap<SLabel, TestSpace>,
-    pub ptrs: HashMap<Sptr, TestPtr>,
+    pub nums: HashMap<NumId, TestNum>,
     pub block_height: u32,
 }
 
@@ -263,9 +260,9 @@ impl TestChain {
     pub fn new() -> Self {
         Self {
             spaces_tree: SubTree::empty(),
-            ptrs_tree: SubTree::empty(),
+            nums_tree: SubTree::empty(),
             spaces: Default::default(),
-            ptrs: Default::default(),
+            nums: Default::default(),
             block_height: 0,
         }
     }
@@ -274,7 +271,7 @@ impl TestChain {
         ChainProof {
             anchor: anchor.clone(),
             spaces: SpacesSubtree(self.spaces_tree.clone()),
-            ptrs: PtrsSubtree(self.ptrs_tree.clone()),
+            nums: NumsSubtree(self.nums_tree.clone()),
         }
     }
 
@@ -305,14 +302,14 @@ impl TestChain {
 
     pub fn current_root_anchor(&self) -> RootAnchor {
         let spaces_root = self.spaces_tree.compute_root().expect("spaces root");
-        let ptrs_root = self.ptrs_tree.compute_root().expect("ptrs root");
+        let nums_root = self.nums_tree.compute_root().expect("nums root");
 
         let block_hash =
-            BlockHash::from_byte_array(rolling_hash::<KeyHash>(spaces_root, ptrs_root));
+            BlockHash::from_byte_array(rolling_hash::<KeyHash>(spaces_root, nums_root));
 
         RootAnchor {
             spaces_root,
-            ptrs_root: Some(ptrs_root),
+            nums_root: Some(nums_root),
             block: ChainAnchor {
                 hash: block_hash,
                 height: self.block_height,
@@ -320,35 +317,35 @@ impl TestChain {
         }
     }
 
-    pub fn add_ptr(&mut self, genesis_spk: ScriptBuf) -> TestPtr {
-        let ptr = TestPtr::new(genesis_spk, self.block_height);
-        assert!(!self.ptrs.contains_key(&ptr.sptr()));
+    pub fn add_num(&mut self, genesis_spk: ScriptBuf) -> TestNum {
+        let num = TestNum::new(genesis_spk, self.block_height);
+        assert!(!self.nums.contains_key(&num.id()));
 
-        self.ptrs_tree
+        self.nums_tree
             .insert(
-                ptr.outpoint_key().into(),
-                ValueOrHash::Value(ptr.ptrout_bytes()),
+                num.outpoint_key().into(),
+                ValueOrHash::Value(num.numout_bytes()),
             )
             .expect("insert ptr");
 
-        self.ptrs_tree
-            .insert(ptr.sptr().into(), ValueOrHash::Value(ptr.outpoint_bytes()))
+        self.nums_tree
+            .insert(num.id().into(), ValueOrHash::Value(num.outpoint_bytes()))
             .expect("insert outpoint");
-        self.ptrs.insert(ptr.sptr().into(), ptr.clone());
-        ptr
+        self.nums.insert(num.id().into(), num.clone());
+        num
     }
 
     pub fn add_space_with_delegation(&mut self, name: &str) -> TestDelegatedSpace {
         let space = self.add_space(name);
-        let ptr = self.add_ptr(space.script_pubkey());
+        let ptr = self.add_num(space.script_pubkey());
 
-        let registry_sptr_key = RegistrySptrKey::from_sptr::<KeyHash>(ptr.sptr());
-        self.ptrs_tree
+        let delegator_key = DelegatorKey::from_id::<KeyHash>(ptr.id());
+        self.nums_tree
             .insert(
-                registry_sptr_key.into(),
+                delegator_key.into(),
                 ValueOrHash::Value(space.label().as_ref().to_vec()),
             )
-            .expect("insert registry sptr key");
+            .expect("insert delegator key");
 
         TestDelegatedSpace { space, ptr }
     }
@@ -357,17 +354,17 @@ impl TestChain {
         &mut self,
         ds: &TestDelegatedSpace,
         root: [u8; 32],
-    ) -> spaces_ptr::Commitment {
+    ) -> spaces_nums::Commitment {
         let prev_finalized = self.rollback_to_finalized_commitment(&ds.space.label());
 
         let commitment = match prev_finalized {
-            None => spaces_ptr::Commitment {
+            None => spaces_nums::Commitment {
                 state_root: root,
                 prev_root: None,
                 rolling_hash: root,
                 block_height: self.block_height,
             },
-            Some(prev) => spaces_ptr::Commitment {
+            Some(prev) => spaces_nums::Commitment {
                 state_root: root,
                 prev_root: Some(prev.state_root),
                 rolling_hash: rolling_hash::<KeyHash>(prev.rolling_hash, root),
@@ -378,11 +375,11 @@ impl TestChain {
         let commitment_key = CommitmentKey::new::<KeyHash>(&ds.space.label(), root);
         let commitment_bytes = borsh::to_vec(&commitment).expect("valid");
 
-        self.ptrs_tree
+        self.nums_tree
             .insert(commitment_key.into(), ValueOrHash::Value(commitment_bytes))
             .expect("insert commitment");
-        let registry_key = RegistryKey::from_slabel::<KeyHash>(&ds.space.label());
-        self.ptrs_tree
+        let registry_key = CommitmentTipKey::from_slabel::<KeyHash>(&ds.space.label());
+        self.nums_tree
             .update(
                 registry_key.into(),
                 ValueOrHash::Value(commitment.state_root.to_vec()),
@@ -396,13 +393,13 @@ impl TestChain {
         &self,
         space: &SLabel,
         root: Option<[u8; 32]>,
-    ) -> Option<spaces_ptr::Commitment> {
+    ) -> Option<spaces_nums::Commitment> {
         let root = match root {
             Some(root) => Some(root),
             None => {
-                let registry_key = RegistryKey::from_slabel::<KeyHash>(space);
+                let registry_key = CommitmentTipKey::from_slabel::<KeyHash>(space);
                 let rkh: [u8; 32] = registry_key.into();
-                self.ptrs_tree
+                self.nums_tree
                     .iter()
                     .find(|(k, _)| **k == rkh)
                     .map(|(_, v)| {
@@ -415,11 +412,11 @@ impl TestChain {
 
         let commitment_key = CommitmentKey::new::<KeyHash>(space, root);
         let ckh: [u8; 32] = commitment_key.into();
-        self.ptrs_tree
+        self.nums_tree
             .iter()
             .find(|(k, _)| **k == ckh)
             .map(|(_, v)| {
-                let commitment: spaces_ptr::Commitment =
+                let commitment: spaces_nums::Commitment =
                     borsh::from_slice(v).expect("valid commitment");
                 commitment
             })
@@ -428,23 +425,23 @@ impl TestChain {
     pub fn rollback_to_finalized_commitment(
         &mut self,
         space: &SLabel,
-    ) -> Option<spaces_ptr::Commitment> {
+    ) -> Option<spaces_nums::Commitment> {
         let commitment = self.get_commitment(space, None)?;
         if commitment.is_finalized(self.block_height) {
             return Some(commitment);
         }
 
-        let registry_key = RegistryKey::from_slabel::<KeyHash>(space);
+        let registry_key = CommitmentTipKey::from_slabel::<KeyHash>(space);
         let commitment_key = CommitmentKey::new::<KeyHash>(space, commitment.state_root);
-        let mut ptrs_tree = self.ptrs_tree.clone();
-        ptrs_tree = ptrs_tree.delete(&registry_key.into()).expect("delete");
-        ptrs_tree = ptrs_tree.delete(&commitment_key.into()).expect("delete");
-        self.ptrs_tree = ptrs_tree;
+        let mut nums_tree = self.nums_tree.clone();
+        nums_tree = nums_tree.delete(&registry_key.into()).expect("delete");
+        nums_tree = nums_tree.delete(&commitment_key.into()).expect("delete");
+        self.nums_tree = nums_tree;
 
         let prev_root = commitment.prev_root?;
         let finalized = self.get_commitment(space, Some(prev_root))?;
 
-        self.ptrs_tree
+        self.nums_tree
             .update(
                 registry_key.into(),
                 ValueOrHash::Value(finalized.state_root.to_vec()),
@@ -555,7 +552,7 @@ impl TestHandleTree {
 
         let receipt = if onchain_commitment.prev_root.is_some() {
             let commitment = libveritas_zk::guest::Commitment {
-                space: KeyHash::hash(self.space.as_ref()),
+                subject: KeyHash::hash(self.space.as_ref()),
                 policy_step: libveritas::constants::STEP_ID,
                 policy_fold: libveritas::constants::FOLD_ID,
                 initial_root,
@@ -601,11 +598,11 @@ impl TestHandleTree {
             self.ds.space.space_key().into(),
         ];
 
-        let mut ptrs_keys: Vec<[u8; 32]> =
-            vec![self.ds.ptr.outpoint_key().into(), self.ds.ptr.sptr().into()];
+        let mut nums_keys: Vec<[u8; 32]> =
+            vec![self.ds.ptr.outpoint_key().into(), self.ds.ptr.id().into()];
 
-        ptrs_keys.push(RegistryKey::from_slabel::<KeyHash>(&self.space).into());
-        ptrs_keys.push(CommitmentKey::new::<KeyHash>(&self.space, tcb.root).into());
+        nums_keys.push(CommitmentTipKey::from_slabel::<KeyHash>(&self.space).into());
+        nums_keys.push(CommitmentKey::new::<KeyHash>(&self.space, tcb.root).into());
 
         let mut handle_keys: Vec<[u8; 32]> = Vec::new();
         let mut handles: Vec<msg::Handle> = Vec::new();
@@ -620,8 +617,8 @@ impl TestHandleTree {
                 .find_map(|c| c.handles.get(&l))
                 .expect("handle must exist in a previous commitment");
 
-            let handle_sptr = Sptr::from_spk::<KeyHash>(handle.genesis_spk.clone());
-            ptrs_keys.push(handle_sptr.into());
+            let handle_num_id = NumId::from_spk::<KeyHash>(handle.genesis_spk.clone());
+            nums_keys.push(handle_num_id.into());
 
             handles.push(msg::Handle {
                 name: l,
@@ -635,10 +632,10 @@ impl TestHandleTree {
             .spaces_tree
             .prove(&spaces_keys, ProofType::Standard)
             .expect("prove spaces");
-        let ptrs_proof = chain
-            .ptrs_tree
-            .prove(&ptrs_keys, ProofType::Standard)
-            .expect("prove ptrs");
+        let nums_proof = chain
+            .nums_tree
+            .prove(&nums_keys, ProofType::Standard)
+            .expect("prove nums");
         let handles_proof = tcb
             .handle_tree
             .prove(&handle_keys, ProofType::Standard)
@@ -648,10 +645,10 @@ impl TestHandleTree {
             chain: msg::ChainProof {
                 anchor: anchor.clone(),
                 spaces: SpacesSubtree(spaces_proof),
-                ptrs: PtrsSubtree(ptrs_proof),
+                nums: NumsSubtree(nums_proof),
             },
             spaces: vec![msg::Bundle {
-                space: self.space.clone(),
+                subject: self.space.clone(),
                 receipt: tcb.receipt.clone(),
                 epochs: vec![msg::Epoch {
                     tree: HandleSubtree(handles_proof),
@@ -682,13 +679,13 @@ impl TestHandleTree {
             self.ds.space.space_key().into(),
         ];
 
-        let mut ptrs_keys: Vec<[u8; 32]> =
-            vec![self.ds.ptr.outpoint_key().into(), self.ds.ptr.sptr().into()];
-        ptrs_keys.push(RegistryKey::from_slabel::<KeyHash>(&self.space).into());
-        ptrs_keys.push(CommitmentKey::new::<KeyHash>(&self.space, tcb.root).into());
+        let mut nums_keys: Vec<[u8; 32]> =
+            vec![self.ds.ptr.outpoint_key().into(), self.ds.ptr.id().into()];
+        nums_keys.push(CommitmentTipKey::from_slabel::<KeyHash>(&self.space).into());
+        nums_keys.push(CommitmentKey::new::<KeyHash>(&self.space, tcb.root).into());
 
-        let handle_sptr = Sptr::from_spk::<KeyHash>(staged.handle.genesis_spk.clone());
-        ptrs_keys.push(handle_sptr.into());
+        let handle_num_id = NumId::from_spk::<KeyHash>(staged.handle.genesis_spk.clone());
+        nums_keys.push(handle_num_id.into());
 
         let handle_key = KeyHash::hash(staged.handle.name.as_slabel().as_ref());
         let handle_keys: Vec<[u8; 32]> = vec![handle_key];
@@ -697,10 +694,10 @@ impl TestHandleTree {
             .spaces_tree
             .prove(&spaces_keys, ProofType::Standard)
             .expect("prove spaces");
-        let ptrs_proof = chain
-            .ptrs_tree
-            .prove(&ptrs_keys, ProofType::Standard)
-            .expect("prove ptrs");
+        let nums_proof = chain
+            .nums_tree
+            .prove(&nums_keys, ProofType::Standard)
+            .expect("prove nums");
         let handles_proof = tcb
             .handle_tree
             .prove(&handle_keys, ProofType::Standard)
@@ -710,10 +707,10 @@ impl TestHandleTree {
             chain: msg::ChainProof {
                 anchor: anchor.clone(),
                 spaces: SpacesSubtree(spaces_proof),
-                ptrs: PtrsSubtree(ptrs_proof),
+                nums: NumsSubtree(nums_proof),
             },
             spaces: vec![msg::Bundle {
-                space: self.space.clone(),
+                subject: self.space.clone(),
                 receipt: tcb.receipt.clone(),
                 epochs: vec![msg::Epoch {
                     tree: HandleSubtree(handles_proof),
