@@ -145,10 +145,8 @@ impl ChainProofRequestUtils for ChainProofRequest {
             return;
         };
 
-        // Space proof
-        if !self.spaces.iter().any(|s| s == &space) {
-            self.spaces.push(space.clone());
-        }
+        // Space proof (named spaces go in spaces tree, numeric in nums tree)
+        self.add_space(space.clone());
 
         // Registry key for commitment tip
         let registry_key = CommitmentTipKey::from_slabel::<KeyHash>(&space);
@@ -204,10 +202,8 @@ impl ChainProofRequestUtils for ChainProofRequest {
     ///
     /// Iterates the subtree to extract genesis_spk values and compute num ID keys.
     fn add_subtree(&mut self, space: &SLabel, handles: &HandleSubtree) {
-        // Space proof
-        if !self.spaces.iter().any(|s| s == space) {
-            self.spaces.push(space.clone());
-        }
+        // Space proof (named spaces go in spaces tree, numeric in nums tree)
+        self.add_space(space.clone());
 
         // Registry key for commitment tip
         let registry_key = CommitmentTipKey::from_slabel::<KeyHash>(space);
@@ -239,12 +235,16 @@ impl ChainProofRequestUtils for ChainProofRequest {
 
     fn add_space(&mut self, space: SLabel) {
         if space.is_numeric() {
-            let numeric : SNumeric = space.try_into().expect("valid numeric");
-            self.nums.push(NumKeyKind::Num(numeric));
+            let numeric: SNumeric = space.try_into().expect("valid numeric");
+            if !self.nums.iter().any(|k| matches!(k, NumKeyKind::Num(n) if *n == numeric)) {
+                self.nums.push(NumKeyKind::Num(numeric));
+            }
             return;
         }
 
-        self.spaces.push(space);
+        if !self.spaces.iter().any(|s| s == &space) {
+            self.spaces.push(space);
+        }
     }
 
     fn add_num_id(&mut self, num_id: NumId) {

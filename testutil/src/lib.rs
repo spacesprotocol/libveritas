@@ -517,6 +517,7 @@ impl TestHandleTree {
             anchor: 0,
             sovereignty: SovereigntyState::Dependent,
             handle: sname(&format!("{}{}", name, self.space)),
+            alias: None,
             script_pubkey: genesis_spk,
             fallback_records: None,
             records: None,

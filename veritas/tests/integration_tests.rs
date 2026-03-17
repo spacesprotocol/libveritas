@@ -438,6 +438,7 @@ impl TestHandleTree {
             anchor: 0,
             sovereignty: SovereigntyState::Dependent,
             handle: sname(&format!("{}{}", name, self.space)),
+            alias: None,
             script_pubkey: genesis_spk,
             fallback_records: None,
             records: None,
@@ -893,6 +894,7 @@ fn verify_uses_better_cached_zone() {
         anchor: 0, // Lower than actual anchor
         sovereignty: SovereigntyState::Dependent,
         handle: sname("alice@bitcoin"),
+        alias: None,
         script_pubkey: ScriptBuf::new(),
         fallback_records: None,
         records: None,

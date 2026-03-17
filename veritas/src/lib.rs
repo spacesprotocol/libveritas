@@ -195,6 +195,8 @@ pub struct Zone {
     pub sovereignty: SovereigntyState,
     /// The space handle this zone represents (e.g., "alice@bitcoin").
     pub handle: SName,
+    /// Set if this zone has a num alias
+    pub alias: Option<SLabel>,
     /// The current script pubkey that controls this handle.
     pub script_pubkey: ScriptBuf,
     /// Verified off-chain records from the handle owner.
@@ -353,6 +355,7 @@ impl BorshSerialize for Zone {
         BorshSerialize::serialize(&self.anchor, writer)?;
         BorshSerialize::serialize(&self.sovereignty, writer)?;
         BorshSerialize::serialize(&self.handle, writer)?;
+        BorshSerialize::serialize(&self.alias, writer)?;
         BorshSerialize::serialize(&self.script_pubkey.as_bytes().to_vec(), writer)?;
         let fallback_bytes: Option<Vec<u8>> = self.fallback_records.as_ref().map(|d| d.as_slice().to_vec());
         BorshSerialize::serialize(&fallback_bytes, writer)?;
@@ -368,6 +371,7 @@ impl BorshDeserialize for Zone {
         let anchor = u32::deserialize_reader(reader)?;
         let sovereignty = SovereigntyState::deserialize_reader(reader)?;
         let handle = SName::deserialize_reader(reader)?;
+        let alias = Option::<SLabel>::deserialize_reader(reader)?;
         let spk_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
         let fallback_bytes: Option<Vec<u8>> = Option::<Vec<u8>>::deserialize_reader(reader)?;
         let records_bytes: Option<Vec<u8>> = Option::<Vec<u8>>::deserialize_reader(reader)?;
@@ -378,6 +382,7 @@ impl BorshDeserialize for Zone {
             anchor,
             sovereignty,
             handle,
+            alias,
             script_pubkey: ScriptBuf::from_bytes(spk_bytes),
             fallback_records: fallback_bytes.map(sip7::RecordSet::new),
             records: records_bytes.map(sip7::RecordSet::new),
@@ -995,61 +1000,44 @@ impl Veritas {
 
     /// Extract parent zone from chain proofs and set sovereignty based on commitment finality.
     fn extract_parent_zone(&self, chain: &msg::ChainProof, bundle: &msg::Bundle) -> Result<Option<Zone>, MessageError> {
-        if bundle.subject.is_numeric() {
+        let (spk, records) = if !bundle.subject.is_numeric() {
+            let Some(spaceout) = chain.spaces.find_space(&bundle.subject) else {
+                return Err(MessageError::SpaceNotFound { space: bundle.subject.to_string() })
+            };
+            let Some(space) = spaceout.space else {
+                return Err(MessageError::SpaceNotFound { space: bundle.subject.to_string() });
+            };
+            let data = space.data();
+            (spaceout.script_pubkey, data
+                .filter(|d| !d.is_empty())
+                .map(|d| sip7::RecordSet::new(d.to_vec())))
+        } else {
             let Some(numout) = chain.nums
                 .find_numeric(&bundle.subject.clone().try_into().expect("numeric"))
                 .ok().flatten() else {
                 return Err(MessageError::NumericNotFound { numeric: bundle.subject.to_string() })
             };
-
-            let handle = SName::from_space(&bundle.subject)
-                .map_err(|_| MessageError::InvalidSubject { subject: bundle.subject.to_string() })?;
-            let mut verified_records = None;
-            if let Some(offchain) = &bundle.records {
-                offchain.verify(&numout.script_pubkey).map_err(|e| MessageError::RecordsInvalid {
-                    handle: handle.to_string(),
-                    reason: e.to_string(),
-                })?;
-                verified_records = Some(offchain.records.clone());
-            }
-            let z = Zone {
-                anchor: chain.anchor.height,
-                sovereignty: SovereigntyState::Sovereign,
-                handle,
-                script_pubkey: numout.script_pubkey,
-                fallback_records: numout.num.data
-                    .filter(|d| !d.is_empty())
-                    .map(|d| sip7::RecordSet::new(d.to_vec())),
-                records: verified_records,
-                delegate: ProvableOption::Empty,
-                commitment: ProvableOption::Empty,
-            };
-            return Ok(Some(z));
-        }
-
-        let Some(spaceout) = chain.spaces.find_space(&bundle.subject) else {
-            return Err(MessageError::SpaceNotFound { space: bundle.subject.to_string() })
+            (numout.script_pubkey, numout.num.data
+                .filter(|d| !d.is_empty())
+                .map(|d| sip7::RecordSet::new(d.to_vec())))
         };
+
         let handle = SName::from_space(&bundle.subject)
             .map_err(|_| MessageError::InvalidSubject { subject: bundle.subject.to_string() })?;
+
         let mut z = Zone {
             anchor: chain.anchor.height,
             sovereignty: SovereigntyState::Sovereign,
             handle,
-            script_pubkey: Default::default(),
-            fallback_records: None,
+            alias: None,
+            script_pubkey: spk,
+            fallback_records: records,
             records: None,
             delegate: ProvableOption::Unknown,
             commitment: ProvableOption::Unknown,
         };
-        let Some(space) = spaceout.space else {
-            return Err(MessageError::SpaceNotFound { space: bundle.subject.to_string() });
-        };
 
-        z.fallback_records = space.data()
-            .filter(|d| !d.is_empty())
-            .map(|d| sip7::RecordSet::new(d.to_vec()));
-        z.script_pubkey = spaceout.script_pubkey.clone();
+
         // Verify records signature if present, store just the RecordSet
         if let Some(offchain) = &bundle.records {
             offchain.verify(&z.script_pubkey).map_err(|e| MessageError::RecordsInvalid {
@@ -1149,6 +1137,7 @@ fn verify_temporary_handle(
         anchor: anchor_height,
         sovereignty: SovereigntyState::Dependent,
         handle: subject.clone(),
+        alias: None,
         script_pubkey: handle.genesis_spk.clone(),
         fallback_records: None,
         records: verified_records,
@@ -1196,14 +1185,15 @@ fn verify_final_handle(
         .find_num(&handle.genesis_spk)
         .map_err(|e| MessageError::NumsProofMalformed { reason: e.to_string() })?;
 
-    let (spk, onchain_data) = match numout {
+    let (spk, onchain_data, alias) = match numout {
         Some(numout) => (
             numout.script_pubkey,
             numout.num.data
                 .filter(|d| !d.is_empty())
                 .map(|d| sip7::RecordSet::new(d.to_vec())),
+            Some(numout.num.name.to_slabel())
         ),
-        None => (handle.genesis_spk.clone(), None),
+        None => (handle.genesis_spk.clone(), None, None),
     };
 
     let mut verified_records = None;
@@ -1219,6 +1209,7 @@ fn verify_final_handle(
         anchor: anchor_height,
         sovereignty,
         handle: subject.clone(),
+        alias,
         script_pubkey: spk,
         fallback_records: onchain_data,
         records: verified_records,

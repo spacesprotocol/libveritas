@@ -156,6 +156,10 @@ impl Zone {
         self.inner.handle.to_string()
     }
 
+    pub fn alias(&self) -> Option<String> {
+        self.inner.alias.as_ref().map(|a| a.to_string())
+    }
+
     pub fn script_pubkey(&self) -> Vec<u8> {
         self.inner.script_pubkey.as_bytes().to_vec()
     }

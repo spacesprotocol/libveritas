@@ -132,6 +132,10 @@ impl Zone {
         self.inner.handle.to_string()
     }
 
+    pub fn alias(&self) -> Option<String> {
+        self.inner.alias.as_ref().map(|a| a.to_string())
+    }
+
     pub fn is_better_than(&self, other: &Zone) -> Result<bool, JsError> {
         self.inner
             .is_better_than(&other.inner)
