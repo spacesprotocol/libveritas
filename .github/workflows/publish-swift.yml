@@ -82,14 +82,18 @@ jobs:
           echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
           echo "XCFramework checksum: $CHECKSUM"
 
-      - name: Publish to libveritas-swift repo
-        env:
-          GH_TOKEN: ${{ secrets.SWIFT_PUBLISH_TOKEN }}
-        run: |
           VERSION="${GITHUB_REF_NAME}"
           if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
             VERSION="v0.0.0-dev.$(date +%Y%m%d%H%M%S)"
           fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Release version: $VERSION"
+
+      - name: Publish to libveritas-swift repo
+        env:
+          GH_TOKEN: ${{ secrets.SWIFT_PUBLISH_TOKEN }}
+        run: |
+          VERSION="${{ steps.checksum.outputs.version }}"
           CHECKSUM="${{ steps.checksum.outputs.checksum }}"
 
           mkdir -p swift-publish/Sources/Libveritas
@@ -139,10 +143,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.SWIFT_PUBLISH_TOKEN }}
         run: |
-          VERSION="${GITHUB_REF_NAME}"
-          if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
-            VERSION="v0.0.0-dev.$(date +%Y%m%d%H%M%S)"
-          fi
+          VERSION="${{ steps.checksum.outputs.version }}"
           gh release create "${VERSION}" \
             --repo spacesprotocol/libveritas-swift \
             --title "${VERSION}" \
