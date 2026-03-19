@@ -18,10 +18,6 @@ jobs:
             target: x86_64-unknown-linux-gnu
             artifact: linux-amd64
             lib: liblibveritas_uniffi.a
-          - runner: macos-13
-            target: x86_64-apple-darwin
-            artifact: darwin-amd64
-            lib: liblibveritas_uniffi.a
           - runner: macos-latest
             target: aarch64-apple-darwin
             artifact: darwin-arm64
@@ -81,12 +77,10 @@ jobs:
       - name: Organize native libraries
         run: |
           mkdir -p go-publish/native/linux-amd64
-          mkdir -p go-publish/native/darwin-amd64
           mkdir -p go-publish/native/darwin-arm64
           mkdir -p go-publish/native/windows-amd64
 
           cp artifacts/linux-amd64/liblibveritas_uniffi.a   go-publish/native/linux-amd64/
-          cp artifacts/darwin-amd64/liblibveritas_uniffi.a   go-publish/native/darwin-amd64/
           cp artifacts/darwin-arm64/liblibveritas_uniffi.a   go-publish/native/darwin-arm64/
           cp artifacts/windows-amd64/libveritas_uniffi.lib   go-publish/native/windows-amd64/
 
@@ -97,7 +91,7 @@ jobs:
           echo "Patching $GO_FILE"
 
           # Insert #cgo LDFLAGS before the #include line
-          sed -i 's|// #include <libveritas_uniffi.h>|// #cgo linux,amd64 LDFLAGS: ${SRCDIR}/native/linux-amd64/liblibveritas_uniffi.a -lm -ldl -lpthread\n// #cgo darwin,amd64 LDFLAGS: ${SRCDIR}/native/darwin-amd64/liblibveritas_uniffi.a -framework Security -framework CoreFoundation -lm\n// #cgo darwin,arm64 LDFLAGS: ${SRCDIR}/native/darwin-arm64/liblibveritas_uniffi.a -framework Security -framework CoreFoundation -lm\n// #cgo windows,amd64 LDFLAGS: ${SRCDIR}/native/windows-amd64/libveritas_uniffi.lib -lws2_32 -lbcrypt -luserenv -lntdll\n// #include <libveritas_uniffi.h>|' "$GO_FILE"
+          sed -i 's|// #include <libveritas_uniffi.h>|// #cgo linux,amd64 LDFLAGS: ${SRCDIR}/native/linux-amd64/liblibveritas_uniffi.a -lm -ldl -lpthread\n// #cgo darwin,arm64 LDFLAGS: ${SRCDIR}/native/darwin-arm64/liblibveritas_uniffi.a -framework Security -framework CoreFoundation -lm\n// #cgo windows,amd64 LDFLAGS: ${SRCDIR}/native/windows-amd64/libveritas_uniffi.lib -lws2_32 -lbcrypt -luserenv -lntdll\n// #include <libveritas_uniffi.h>|' "$GO_FILE"
 
       - name: Setup Go module
         run: |
