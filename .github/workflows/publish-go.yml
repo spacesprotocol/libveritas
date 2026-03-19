@@ -10,7 +10,48 @@ permissions:
   contents: write
 
 jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: linux-amd64
+            lib: liblibveritas_uniffi.a
+          - runner: macos-13
+            target: x86_64-apple-darwin
+            artifact: darwin-amd64
+            lib: liblibveritas_uniffi.a
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            artifact: darwin-arm64
+            lib: liblibveritas_uniffi.a
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: windows-amd64
+            lib: libveritas_uniffi.lib
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build static library
+        run: cargo build -p libveritas-uniffi --release
+
+      - name: Upload static library
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: target/release/${{ matrix.lib }}
+
   publish:
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,7 +64,7 @@ jobs:
       - name: Install uniffi-bindgen-go
         run: cargo install uniffi-bindgen-go --git https://github.com/NordSecurity/uniffi-bindgen-go --tag v0.4.0+v0.28.3
 
-      - name: Build shared library
+      - name: Build shared library for binding generation
         run: cargo build -p libveritas-uniffi --release
 
       - name: Generate Go bindings
@@ -31,6 +72,32 @@ jobs:
           uniffi-bindgen-go \
             --library target/release/liblibveritas_uniffi.so \
             --out-dir go-publish/
+
+      - name: Download all static libraries
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Organize native libraries
+        run: |
+          mkdir -p go-publish/native/linux-amd64
+          mkdir -p go-publish/native/darwin-amd64
+          mkdir -p go-publish/native/darwin-arm64
+          mkdir -p go-publish/native/windows-amd64
+
+          cp artifacts/linux-amd64/liblibveritas_uniffi.a   go-publish/native/linux-amd64/
+          cp artifacts/darwin-amd64/liblibveritas_uniffi.a   go-publish/native/darwin-amd64/
+          cp artifacts/darwin-arm64/liblibveritas_uniffi.a   go-publish/native/darwin-arm64/
+          cp artifacts/windows-amd64/libveritas_uniffi.lib   go-publish/native/windows-amd64/
+
+      - name: Patch Go file with cgo directives
+        run: |
+          # Find the generated .go file
+          GO_FILE=$(find go-publish -name '*.go' -type f | head -1)
+          echo "Patching $GO_FILE"
+
+          # Insert #cgo LDFLAGS before the #include line
+          sed -i 's|// #include <libveritas_uniffi.h>|// #cgo linux,amd64 LDFLAGS: ${SRCDIR}/native/linux-amd64/liblibveritas_uniffi.a -lm -ldl -lpthread\n// #cgo darwin,amd64 LDFLAGS: ${SRCDIR}/native/darwin-amd64/liblibveritas_uniffi.a -framework Security -framework CoreFoundation -lm\n// #cgo darwin,arm64 LDFLAGS: ${SRCDIR}/native/darwin-arm64/liblibveritas_uniffi.a -framework Security -framework CoreFoundation -lm\n// #cgo windows,amd64 LDFLAGS: ${SRCDIR}/native/windows-amd64/libveritas_uniffi.lib -lws2_32 -lbcrypt -luserenv -lntdll\n// #include <libveritas_uniffi.h>|' "$GO_FILE"
 
       - name: Setup Go module
         run: |
@@ -40,15 +107,11 @@ jobs:
           fi
           cd go-publish
 
-          # Initialize Go module
           cat > go.mod << EOF
           module github.com/spacesprotocol/libveritas-go
 
           go 1.21
           EOF
-
-          # Copy shared library
-          cp ../target/release/liblibveritas_uniffi.so .
 
       - name: Publish to libveritas-go repo
         env:
