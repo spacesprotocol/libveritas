@@ -91,7 +91,7 @@ jobs:
           echo "Patching $GO_FILE"
 
           # Insert #cgo LDFLAGS before the #include line
-          sed -i 's|// #include <libveritas_uniffi.h>|// #cgo linux,amd64 LDFLAGS: ${SRCDIR}/native/linux-amd64/liblibveritas_uniffi.a -lm -ldl -lpthread\n// #cgo darwin,arm64 LDFLAGS: ${SRCDIR}/native/darwin-arm64/liblibveritas_uniffi.a -framework Security -framework CoreFoundation -lm\n// #cgo windows,amd64 LDFLAGS: ${SRCDIR}/native/windows-amd64/libveritas_uniffi.lib -lws2_32 -lbcrypt -luserenv -lntdll\n// #include <libveritas_uniffi.h>|' "$GO_FILE"
+          sed -i 's|// #include <libveritas_uniffi.h>|// #cgo linux,amd64 LDFLAGS: ${SRCDIR}/../native/linux-amd64/liblibveritas_uniffi.a -lm -ldl -lpthread\n// #cgo darwin,arm64 LDFLAGS: ${SRCDIR}/../native/darwin-arm64/liblibveritas_uniffi.a -framework Security -framework CoreFoundation -lm\n// #cgo windows,amd64 LDFLAGS: ${SRCDIR}/../native/windows-amd64/libveritas_uniffi.lib -lws2_32 -lbcrypt -luserenv -lntdll\n// #include <libveritas_uniffi.h>|' "$GO_FILE"
 
       - name: Setup Go module
         run: |
