@@ -65,7 +65,12 @@ jobs:
         run: |
           uniffi-bindgen-go \
             --library target/release/liblibveritas_uniffi.so \
-            --out-dir go-publish/
+            --out-dir go-gen/
+          # Move from subdirectory to repo root so import is github.com/spacesprotocol/libveritas-go
+          mv go-gen/libveritas_uniffi/* go-publish/
+          rm -rf go-gen
+          # Rename Go package from libveritas_uniffi to libveritas
+          sed -i 's/^package libveritas_uniffi$/package libveritas/' go-publish/*.go
 
       - name: Download all static libraries
         uses: actions/download-artifact@v4
@@ -90,7 +95,7 @@ jobs:
           echo "Patching $GO_FILE"
 
           # Insert #cgo LDFLAGS before the #include line
-          sed -i 's|// #include <libveritas_uniffi.h>|// #cgo linux,amd64 LDFLAGS: ${SRCDIR}/../native/linux-amd64/liblibveritas_uniffi.a -lm -ldl -lpthread\n// #cgo darwin,arm64 LDFLAGS: ${SRCDIR}/../native/darwin-arm64/liblibveritas_uniffi.a -framework Security -framework CoreFoundation -lm\n// #cgo windows,amd64 LDFLAGS: ${SRCDIR}/../native/windows-amd64/libveritas_uniffi.lib -lws2_32 -lbcrypt -luserenv -lntdll\n// #include <libveritas_uniffi.h>|' "$GO_FILE"
+          sed -i 's|// #include <libveritas_uniffi.h>|// #cgo linux,amd64 LDFLAGS: ${SRCDIR}/native/linux-amd64/liblibveritas_uniffi.a -lm -ldl -lpthread\n// #cgo darwin,arm64 LDFLAGS: ${SRCDIR}/native/darwin-arm64/liblibveritas_uniffi.a -framework Security -framework CoreFoundation -lm\n// #cgo windows,amd64 LDFLAGS: ${SRCDIR}/native/windows-amd64/libveritas_uniffi.lib -lws2_32 -lbcrypt -luserenv -lntdll\n// #include <libveritas_uniffi.h>|' "$GO_FILE"
 
       - name: Setup Go module
         run: |

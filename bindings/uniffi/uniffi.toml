@@ -1,0 +1,8 @@
+[bindings.kotlin]
+package_name = "org.spacesprotocol.libveritas"
+
+[bindings.swift]
+module_name = "Libveritas"
+
+[bindings.python]
+module_name = "libveritas"
