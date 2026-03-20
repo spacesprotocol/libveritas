@@ -311,6 +311,25 @@ impl MessageBuilder {
         }
     }
 
+    /// Add a .spacecert chain with records.
+    pub fn add_handle(&self, chain_bytes: Vec<u8>, records_bytes: Vec<u8>) -> Result<(), VeritasError> {
+        let chain = libveritas::cert::CertificateChain::from_slice(&chain_bytes)
+            .map_err(|e| VeritasError::InvalidInput {
+                msg: format!("invalid chain: {e}"),
+            })?;
+        let records = msg::OffchainRecords::from_slice(&records_bytes)
+            .map_err(|e| VeritasError::InvalidInput {
+                msg: format!("invalid records: {e}"),
+            })?;
+        self.inner.write().unwrap()
+            .as_mut()
+            .ok_or_else(|| VeritasError::InvalidInput {
+                msg: "builder already consumed by build()".to_string(),
+            })?
+            .add_handle(chain, records);
+        Ok(())
+    }
+
     /// Add all certificates from a .spacecert chain.
     pub fn add_chain(&self, chain_bytes: Vec<u8>) -> Result<(), VeritasError> {
         let chain = libveritas::cert::CertificateChain::from_slice(&chain_bytes)

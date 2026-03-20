@@ -26,6 +26,18 @@ impl MessageBuilder {
         }
     }
 
+    /// Add a .spacecert chain with records.
+    /// The handle name is taken from the chain's subject.
+    pub fn add_handle(&mut self, chain: CertificateChain, records: OffchainRecords) {
+        let handle = chain.subject().clone();
+        self.certs.extend(chain.into_certs());
+        self.updates.push(DataUpdateRequest {
+            handle,
+            records: Some(records),
+            delegate_records: None,
+        });
+    }
+
     pub fn add_chain(&mut self, chain: CertificateChain) {
         self.certs.extend(chain.into_certs());
     }

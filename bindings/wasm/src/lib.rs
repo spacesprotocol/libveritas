@@ -173,6 +173,17 @@ impl MessageBuilder {
             .ok_or_else(|| JsError::new("builder already consumed by build()"))
     }
 
+    /// Add a .spacecert chain with records.
+    #[wasm_bindgen(js_name = "addHandle")]
+    pub fn add_handle(&mut self, chain_bytes: &[u8], records_bytes: &[u8]) -> Result<(), JsError> {
+        let chain = libveritas::cert::CertificateChain::from_slice(chain_bytes)
+            .map_err(|e| JsError::new(&format!("invalid chain: {e}")))?;
+        let records = msg::OffchainRecords::from_slice(records_bytes)
+            .map_err(|e| JsError::new(&format!("invalid records: {e}")))?;
+        self.inner_mut()?.add_handle(chain, records);
+        Ok(())
+    }
+
     /// Add all certificates from a .spacecert chain.
     #[wasm_bindgen(js_name = "addChain")]
     pub fn add_chain(&mut self, chain_bytes: &[u8]) -> Result<(), JsError> {

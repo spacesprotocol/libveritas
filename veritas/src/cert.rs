@@ -12,7 +12,7 @@ use spaces_protocol::slabel::SLabel;
 use spaces_protocol::SpaceOut;
 use spaces_nums::{snumeric::SNumeric, ChainProofRequest, Commitment, CommitmentKey, NumericKey, NumKeyKind, NumOut, CommitmentTipKey};
 use spaces_nums::num_id::NumId;
-use crate::sname::{Label, SName};
+use crate::sname::{Label, NameLike, SName};
 
 /// Current certificate version.
 pub const CERTIFICATE_VERSION: u8 = 2;
@@ -26,19 +26,24 @@ const CHAIN_VERSION: u8 = 1;
 ///
 /// Wire format:
 /// ```text
-/// [4B magic "SCRT"] [1B version] [2B cert_count]
-///   [4B len][cert borsh bytes]...
+/// [4B magic "SCRT"] [1B version] [1B subject_len][subject bytes]
+///   [2B cert_count] [4B len][cert bytes]...
 /// ```
 ///
 /// Root certificate comes first, followed by leaves in depth order.
 #[derive(Clone)]
 pub struct CertificateChain {
+    subject: SName,
     certs: Vec<Certificate>,
 }
 
 impl CertificateChain {
-    pub fn new(certs: Vec<Certificate>) -> Self {
-        Self { certs }
+    pub fn new(subject: SName, certs: Vec<Certificate>) -> Self {
+        Self { subject, certs }
+    }
+
+    pub fn subject(&self) -> &SName {
+        &self.subject
     }
 
     pub fn certs(&self) -> &[Certificate] {
@@ -53,6 +58,9 @@ impl CertificateChain {
         let mut buf = Vec::new();
         buf.extend_from_slice(CHAIN_MAGIC);
         buf.push(CHAIN_VERSION);
+        let subject_bytes = self.subject.to_bytes();
+        buf.push(subject_bytes.len() as u8);
+        buf.extend_from_slice(subject_bytes);
         let count = self.certs.len() as u16;
         buf.extend_from_slice(&count.to_le_bytes());
         for cert in &self.certs {
@@ -80,8 +88,15 @@ impl CertificateChain {
                 format!("unsupported chain version: {}", version),
             ));
         }
-        let count = u16::from_le_bytes([bytes[5], bytes[6]]) as usize;
-        let mut offset = 7;
+        let subject_len = bytes[5] as usize;
+        if 6 + subject_len + 2 > bytes.len() {
+            return Err(Error::new(ErrorKind::UnexpectedEof, "truncated subject"));
+        }
+        let subject = SName::try_from(&bytes[6..6 + subject_len])
+            .map_err(|e| Error::new(ErrorKind::InvalidData, format!("invalid subject: {}", e)))?;
+        let mut offset = 6 + subject_len;
+        let count = u16::from_le_bytes([bytes[offset], bytes[offset + 1]]) as usize;
+        offset += 2;
         let mut certs = Vec::with_capacity(count);
         for _ in 0..count {
             if offset + 4 > bytes.len() {
@@ -101,7 +116,7 @@ impl CertificateChain {
             certs.push(cert);
             offset += len;
         }
-        Ok(Self { certs })
+        Ok(Self { subject, certs })
     }
 }
 
