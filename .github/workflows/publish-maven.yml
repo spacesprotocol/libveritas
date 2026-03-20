@@ -77,3 +77,10 @@ jobs:
           CENTRAL_PORTAL_PASSWORD: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
           GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Finalize deployment on Central Portal
+        run: |
+          AUTH=$(echo -n "${{ secrets.CENTRAL_PORTAL_USERNAME }}:${{ secrets.CENTRAL_PORTAL_PASSWORD }}" | base64)
+          curl -f -X POST \
+            -H "Authorization: Bearer $AUTH" \
+            "https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/org.spacesprotocol"

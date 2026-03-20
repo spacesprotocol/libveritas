@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
     id("com.android.library") version "9.0.1"
     `maven-publish`
@@ -80,9 +82,14 @@ publishing {
         maven {
             name = "CentralPortal"
             url = uri("https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/")
-            credentials {
-                username = System.getenv("CENTRAL_PORTAL_USERNAME")
-                password = System.getenv("CENTRAL_PORTAL_PASSWORD")
+            credentials(HttpHeaderCredentials::class) {
+                name = "Authorization"
+                val user = System.getenv("CENTRAL_PORTAL_USERNAME") ?: ""
+                val pass = System.getenv("CENTRAL_PORTAL_PASSWORD") ?: ""
+                value = "Bearer " + Base64.getEncoder().encodeToString("$user:$pass".toByteArray())
+            }
+            authentication {
+                create<HttpHeaderAuthentication>("header")
             }
         }
     }
