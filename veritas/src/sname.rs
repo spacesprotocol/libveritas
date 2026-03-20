@@ -13,7 +13,7 @@ pub const MAX_LABEL_LEN: usize = 62;
 ///
 /// Wire format: length-prefixed labels terminated by a null byte.
 /// Display format: `labels@space` (e.g., `alice@bitcoin`, `key.wallet@bitcoin`).
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SName([u8; MAX_SPACE_LEN]);
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

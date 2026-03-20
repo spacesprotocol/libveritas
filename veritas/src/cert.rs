@@ -17,6 +17,95 @@ use crate::sname::{Label, SName};
 /// Current certificate version.
 pub const CERTIFICATE_VERSION: u8 = 2;
 
+/// Magic bytes identifying a `.spacecert` file.
+const CHAIN_MAGIC: &[u8; 4] = b"SCRT";
+/// Current chain container version.
+const CHAIN_VERSION: u8 = 1;
+
+/// A chain of certificates bundled into a single `.spacecert` file.
+///
+/// Wire format:
+/// ```text
+/// [4B magic "SCRT"] [1B version] [2B cert_count]
+///   [4B len][cert borsh bytes]...
+/// ```
+///
+/// Root certificate comes first, followed by leaves in depth order.
+#[derive(Clone)]
+pub struct CertificateChain {
+    certs: Vec<Certificate>,
+}
+
+impl CertificateChain {
+    pub fn new(certs: Vec<Certificate>) -> Self {
+        Self { certs }
+    }
+
+    pub fn certs(&self) -> &[Certificate] {
+        &self.certs
+    }
+
+    pub fn into_certs(self) -> Vec<Certificate> {
+        self.certs
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(CHAIN_MAGIC);
+        buf.push(CHAIN_VERSION);
+        let count = self.certs.len() as u16;
+        buf.extend_from_slice(&count.to_le_bytes());
+        for cert in &self.certs {
+            let cert_bytes = cert.to_bytes();
+            let len = cert_bytes.len() as u32;
+            buf.extend_from_slice(&len.to_le_bytes());
+            buf.extend_from_slice(&cert_bytes);
+        }
+        buf
+    }
+
+    pub fn from_slice(bytes: &[u8]) -> Result<Self, std::io::Error> {
+        use std::io::{Error, ErrorKind};
+
+        if bytes.len() < 7 {
+            return Err(Error::new(ErrorKind::InvalidData, "too short for chain header"));
+        }
+        if &bytes[0..4] != CHAIN_MAGIC {
+            return Err(Error::new(ErrorKind::InvalidData, "invalid magic bytes"));
+        }
+        let version = bytes[4];
+        if version != CHAIN_VERSION {
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                format!("unsupported chain version: {}", version),
+            ));
+        }
+        let count = u16::from_le_bytes([bytes[5], bytes[6]]) as usize;
+        let mut offset = 7;
+        let mut certs = Vec::with_capacity(count);
+        for _ in 0..count {
+            if offset + 4 > bytes.len() {
+                return Err(Error::new(ErrorKind::UnexpectedEof, "truncated cert length"));
+            }
+            let len = u32::from_le_bytes([
+                bytes[offset],
+                bytes[offset + 1],
+                bytes[offset + 2],
+                bytes[offset + 3],
+            ]) as usize;
+            offset += 4;
+            if offset + len > bytes.len() {
+                return Err(Error::new(ErrorKind::UnexpectedEof, "truncated cert data"));
+            }
+            let cert = Certificate::from_slice(&bytes[offset..offset + len])?;
+            certs.push(cert);
+            offset += len;
+        }
+        Ok(Self { certs })
+    }
+}
+
+
 /// A slim offline backup certificate for space handle ownership.
 ///
 /// Certificate contains only data that cannot be recovered from a spaced client:

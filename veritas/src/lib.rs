@@ -22,6 +22,7 @@ pub mod msg;
 pub mod sname;
 pub mod constants;
 pub mod builder;
+pub mod names;
 
 pub use sip7;
 
@@ -156,6 +157,7 @@ pub struct Veritas {
     oldest_anchor: u32,
     newest_anchor: u32,
     dev_mode: bool,
+    expand_names: bool,
 }
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -691,6 +693,7 @@ impl Veritas {
             oldest_anchor: 0,
             newest_anchor: 0,
             dev_mode: false,
+            expand_names: true,
         }
     }
 
@@ -713,6 +716,15 @@ impl Veritas {
 
     pub fn dev_mode(&self) -> bool {
         self.dev_mode
+    }
+
+    pub fn with_expand_names(mut self, enabled: bool) -> Self {
+        self.expand_names = enabled;
+        self
+    }
+
+    pub fn expand_names(&self) -> bool {
+        self.expand_names
     }
 
     pub fn oldest_anchor(&self) -> u32 {
@@ -764,6 +776,11 @@ impl Veritas {
             if let Some(vb) = verified_bundle {
                 verified_bundles.push(vb);
             }
+        }
+
+        if self.expand_names {
+            let resolver = names::NameResolver::from_zones(&zones);
+            resolver.expand_zones(&mut zones);
         }
 
         Ok(VerifiedMessage {

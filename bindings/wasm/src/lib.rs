@@ -50,27 +50,6 @@ fn parse_data_update(entry: &JsValue) -> Result<builder::DataUpdateRequest, JsEr
     })
 }
 
-/// Parse a JS object into an UpdateRequest (name + offchain data + optional cert).
-fn parse_update_entry(entry: &JsValue) -> Result<builder::UpdateRequest, JsError> {
-    let data = parse_data_update(entry)?;
-    let cert = get_optional_bytes(entry, "cert")
-        .map(|b| libveritas::cert::Certificate::from_slice(&b))
-        .transpose()
-        .map_err(|e| JsError::new(&format!("invalid cert: {e}")))?;
-
-    Ok(builder::UpdateRequest { data, cert })
-}
-
-/// Parse a JS array of UpdateRequests (for MessageBuilder).
-fn parse_update_entries(updates: &JsValue) -> Result<Vec<builder::UpdateRequest>, JsError> {
-    let array = js_sys::Array::from(updates);
-    let mut reqs = Vec::with_capacity(array.length() as usize);
-    for i in 0..array.length() {
-        reqs.push(parse_update_entry(&array.get(i))?);
-    }
-    Ok(reqs)
-}
-
 /// Parse a JS array of DataUpdateRequests (for Message.update).
 fn parse_data_updates(updates: &JsValue) -> Result<Vec<builder::DataUpdateRequest>, JsError> {
     let array = js_sys::Array::from(updates);
@@ -175,20 +154,60 @@ pub struct MessageBuilder {
 
 #[wasm_bindgen]
 impl MessageBuilder {
-    /// Create a builder from a JS array of update requests.
+    /// Create an empty builder.
     ///
     /// ```js
-    /// let builder = new MessageBuilder([
-    ///   { name: "@bitcoin", records: Uint8Array, cert: Uint8Array },
-    ///   { name: "alice@bitcoin", records: Uint8Array, cert: Uint8Array }
-    /// ])
+    /// let builder = new MessageBuilder()
+    /// builder.addChain(chainBytes)
+    /// builder.addRecords("alice@bitcoin", recordsBytes)
     /// ```
     #[wasm_bindgen(constructor)]
-    pub fn new(requests: JsValue) -> Result<MessageBuilder, JsError> {
-        let reqs = parse_update_entries(&requests)?;
-        Ok(MessageBuilder {
-            inner: Some(builder::MessageBuilder::new(reqs)),
-        })
+    pub fn new() -> MessageBuilder {
+        MessageBuilder {
+            inner: Some(builder::MessageBuilder::new()),
+        }
+    }
+
+    fn inner_mut(&mut self) -> Result<&mut builder::MessageBuilder, JsError> {
+        self.inner.as_mut()
+            .ok_or_else(|| JsError::new("builder already consumed by build()"))
+    }
+
+    /// Add all certificates from a .spacecert chain.
+    #[wasm_bindgen(js_name = "addChain")]
+    pub fn add_chain(&mut self, chain_bytes: &[u8]) -> Result<(), JsError> {
+        let chain = libveritas::cert::CertificateChain::from_slice(chain_bytes)
+            .map_err(|e| JsError::new(&format!("invalid chain: {e}")))?;
+        self.inner_mut()?.add_chain(chain);
+        Ok(())
+    }
+
+    /// Add a single certificate.
+    #[wasm_bindgen(js_name = "addCert")]
+    pub fn add_cert(&mut self, cert_bytes: &[u8]) -> Result<(), JsError> {
+        let cert = libveritas::cert::Certificate::from_slice(cert_bytes)
+            .map_err(|e| JsError::new(&format!("invalid cert: {e}")))?;
+        self.inner_mut()?.add_cert(cert);
+        Ok(())
+    }
+
+    /// Add records for a handle.
+    #[wasm_bindgen(js_name = "addRecords")]
+    pub fn add_records(&mut self, handle: &str, records_bytes: &[u8]) -> Result<(), JsError> {
+        let sname = SName::from_str(handle)
+            .map_err(|e| JsError::new(&format!("invalid handle: {e}")))?;
+        let records = msg::OffchainRecords::from_slice(records_bytes)
+            .map_err(|e| JsError::new(&format!("invalid records: {e}")))?;
+        self.inner_mut()?.add_records(sname, records);
+        Ok(())
+    }
+
+    /// Add a full data update (records + optional delegate records).
+    #[wasm_bindgen(js_name = "addUpdate")]
+    pub fn add_update(&mut self, entry: JsValue) -> Result<(), JsError> {
+        let update = parse_data_update(&entry)?;
+        self.inner_mut()?.add_update(update);
+        Ok(())
     }
 
     /// Returns the chain proof request as a JS object.
@@ -254,12 +273,13 @@ impl Veritas {
         Ok(Veritas { inner })
     }
 
-    #[wasm_bindgen(js_name = "withDevMode")]
-    pub fn with_dev_mode(anchors: &Anchors) -> Result<Veritas, JsError> {
+    #[wasm_bindgen(js_name = "withOptions")]
+    pub fn with_options(anchors: &Anchors, expand_names: bool, dev_mode: bool) -> Result<Veritas, JsError> {
         let inner = libveritas::Veritas::new()
             .with_anchors(anchors.inner.clone())
             .map_err(|e| JsError::new(&e.to_string()))?
-            .with_dev_mode(true);
+            .with_expand_names(expand_names)
+            .with_dev_mode(dev_mode);
         Ok(Veritas { inner })
     }
 

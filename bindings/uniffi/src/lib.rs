@@ -59,15 +59,6 @@ pub struct DataUpdateEntry {
     pub delegate_records: Option<Vec<u8>>,
 }
 
-/// Update entry for MessageBuilder — includes optional cert.
-#[derive(uniffi::Record)]
-pub struct UpdateEntry {
-    pub name: String,
-    pub records: Option<Vec<u8>>,
-    pub delegate_records: Option<Vec<u8>>,
-    pub cert: Option<Vec<u8>>,
-}
-
 // -- Conversions --
 
 fn cert_to_record(c: &libveritas::cert::Certificate) -> Certificate {
@@ -114,27 +105,6 @@ fn parse_data_update(entry: &DataUpdateEntry) -> Result<builder::DataUpdateReque
 
 fn parse_data_updates(entries: &[DataUpdateEntry]) -> Result<Vec<builder::DataUpdateRequest>, VeritasError> {
     entries.iter().map(parse_data_update).collect()
-}
-
-fn parse_update_entry(entry: &UpdateEntry) -> Result<builder::UpdateRequest, VeritasError> {
-    let data = parse_data_update(&DataUpdateEntry {
-        name: entry.name.clone(),
-        records: entry.records.clone(),
-        delegate_records: entry.delegate_records.clone(),
-    })?;
-
-    let cert = entry.cert.as_ref()
-        .map(|b| libveritas::cert::Certificate::from_slice(b))
-        .transpose()
-        .map_err(|e| VeritasError::InvalidInput {
-            msg: format!("invalid cert: {e}"),
-        })?;
-
-    Ok(builder::UpdateRequest { data, cert })
-}
-
-fn parse_update_entries(entries: &[UpdateEntry]) -> Result<Vec<builder::UpdateRequest>, VeritasError> {
-    entries.iter().map(parse_update_entry).collect()
 }
 
 // -- Objects --
@@ -333,13 +303,73 @@ pub struct MessageBuilder {
 
 #[uniffi::export]
 impl MessageBuilder {
-    /// Create a builder from a list of update entries.
+    /// Create an empty builder.
     #[uniffi::constructor]
-    pub fn new(requests: Vec<UpdateEntry>) -> Result<Self, VeritasError> {
-        let reqs = parse_update_entries(&requests)?;
-        Ok(MessageBuilder {
-            inner: RwLock::new(Some(builder::MessageBuilder::new(reqs))),
-        })
+    pub fn new() -> Self {
+        MessageBuilder {
+            inner: RwLock::new(Some(builder::MessageBuilder::new())),
+        }
+    }
+
+    /// Add all certificates from a .spacecert chain.
+    pub fn add_chain(&self, chain_bytes: Vec<u8>) -> Result<(), VeritasError> {
+        let chain = libveritas::cert::CertificateChain::from_slice(&chain_bytes)
+            .map_err(|e| VeritasError::InvalidInput {
+                msg: format!("invalid chain: {e}"),
+            })?;
+        self.inner.write().unwrap()
+            .as_mut()
+            .ok_or_else(|| VeritasError::InvalidInput {
+                msg: "builder already consumed by build()".to_string(),
+            })?
+            .add_chain(chain);
+        Ok(())
+    }
+
+    /// Add a single certificate.
+    pub fn add_cert(&self, cert_bytes: Vec<u8>) -> Result<(), VeritasError> {
+        let cert = libveritas::cert::Certificate::from_slice(&cert_bytes)
+            .map_err(|e| VeritasError::InvalidInput {
+                msg: format!("invalid cert: {e}"),
+            })?;
+        self.inner.write().unwrap()
+            .as_mut()
+            .ok_or_else(|| VeritasError::InvalidInput {
+                msg: "builder already consumed by build()".to_string(),
+            })?
+            .add_cert(cert);
+        Ok(())
+    }
+
+    /// Add records for a handle.
+    pub fn add_records(&self, handle: String, records_bytes: Vec<u8>) -> Result<(), VeritasError> {
+        let sname = SName::from_str(&handle)
+            .map_err(|e| VeritasError::InvalidInput {
+                msg: format!("invalid handle: {e}"),
+            })?;
+        let records = msg::OffchainRecords::from_slice(&records_bytes)
+            .map_err(|e| VeritasError::InvalidInput {
+                msg: format!("invalid records: {e}"),
+            })?;
+        self.inner.write().unwrap()
+            .as_mut()
+            .ok_or_else(|| VeritasError::InvalidInput {
+                msg: "builder already consumed by build()".to_string(),
+            })?
+            .add_records(sname, records);
+        Ok(())
+    }
+
+    /// Add a full data update (records + optional delegate records).
+    pub fn add_update(&self, entry: DataUpdateEntry) -> Result<(), VeritasError> {
+        let update = parse_data_update(&entry)?;
+        self.inner.write().unwrap()
+            .as_mut()
+            .ok_or_else(|| VeritasError::InvalidInput {
+                msg: "builder already consumed by build()".to_string(),
+            })?
+            .add_update(update);
+        Ok(())
     }
 
     /// Returns the chain proof request as JSON.
@@ -515,14 +545,15 @@ impl Veritas {
         Ok(Veritas { inner })
     }
 
-    #[uniffi::constructor(name = "with_dev_mode")]
-    pub fn with_dev_mode(anchors: &Anchors) -> Result<Self, VeritasError> {
+    #[uniffi::constructor(name = "with_options")]
+    pub fn with_options(anchors: &Anchors, expand_names: bool, dev_mode: bool) -> Result<Self, VeritasError> {
         let inner = libveritas::Veritas::new()
             .with_anchors(anchors.inner.clone())
             .map_err(|e| VeritasError::InvalidInput {
                 msg: e.to_string(),
             })?
-            .with_dev_mode(true);
+            .with_expand_names(expand_names)
+            .with_dev_mode(dev_mode);
         Ok(Veritas { inner })
     }
 
