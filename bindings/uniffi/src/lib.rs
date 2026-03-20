@@ -545,18 +545,6 @@ impl Veritas {
         Ok(Veritas { inner })
     }
 
-    #[uniffi::constructor(name = "with_options")]
-    pub fn with_options(anchors: &Anchors, expand_names: bool, dev_mode: bool) -> Result<Self, VeritasError> {
-        let inner = libveritas::Veritas::new()
-            .with_anchors(anchors.inner.clone())
-            .map_err(|e| VeritasError::InvalidInput {
-                msg: e.to_string(),
-            })?
-            .with_expand_names(expand_names)
-            .with_dev_mode(dev_mode);
-        Ok(Veritas { inner })
-    }
-
     pub fn oldest_anchor(&self) -> u32 {
         self.inner.oldest_anchor()
     }
@@ -577,8 +565,8 @@ impl Veritas {
         self.inner.sovereignty_for(commitment_height).to_string()
     }
 
-    /// Verify a message against a query context.
-    pub fn verify_message(
+    /// Verify a message with default options (expand_names: true, dev_mode: false).
+    pub fn verify(
         &self,
         ctx: &QueryContext,
         msg: &Message,
@@ -588,7 +576,28 @@ impl Veritas {
 
         let inner = self
             .inner
-            .verify_message(&ctx_guard, msg_inner.clone())
+            .verify(&ctx_guard, msg_inner.clone())
+            .map_err(|e| VeritasError::VerificationFailed {
+                msg: e.to_string(),
+            })?;
+
+        Ok(Arc::new(VerifiedMessage { inner }))
+    }
+
+    /// Verify a message with explicit options.
+    pub fn verify_with_options(
+        &self,
+        ctx: &QueryContext,
+        msg: &Message,
+        expand_names: bool,
+        dev_mode: bool,
+    ) -> Result<Arc<VerifiedMessage>, VeritasError> {
+        let ctx_guard = ctx.inner.read().unwrap();
+        let msg_inner = msg.inner.read().unwrap();
+
+        let inner = self
+            .inner
+            .verify_with_options(&ctx_guard, msg_inner.clone(), expand_names, dev_mode)
             .map_err(|e| VeritasError::VerificationFailed {
                 msg: e.to_string(),
             })?;
@@ -639,6 +648,49 @@ impl VerifiedMessage {
     /// Get the verified message as borsh bytes.
     pub fn message_bytes(&self) -> Vec<u8> {
         self.inner.message.to_bytes()
+    }
+}
+
+/// Batched iterative resolver for nested handle names.
+#[derive(uniffi::Object)]
+pub struct Lookup {
+    inner: libveritas::names::Lookup,
+}
+
+#[uniffi::export]
+impl Lookup {
+    /// Create a lookup from a list of handle name strings.
+    #[uniffi::constructor]
+    pub fn new(names: Vec<String>) -> Result<Self, VeritasError> {
+        let snames: Vec<SName> = names.iter()
+            .map(|n| SName::from_str(n).map_err(|e| VeritasError::InvalidInput {
+                msg: format!("invalid name '{}': {}", n, e),
+            }))
+            .collect::<Result<_, _>>()?;
+        Ok(Lookup { inner: libveritas::names::Lookup::new(snames) })
+    }
+
+    /// Returns the first batch of handles to look up.
+    pub fn start(&self) -> Vec<String> {
+        self.inner.start().iter().map(|s| s.to_string()).collect()
+    }
+
+    /// Feed zones from a resolveAll response.
+    /// Returns the next batch of handles to look up (empty = done).
+    pub fn advance(&self, zones: Vec<Zone>) -> Result<Vec<String>, VeritasError> {
+        let inner_zones: Vec<libveritas::Zone> = zones.iter()
+            .map(zone_to_inner)
+            .collect::<Result<_, _>>()?;
+        Ok(self.inner.advance(&inner_zones).iter().map(|s| s.to_string()).collect())
+    }
+
+    /// Expand zone handles using the alias map accumulated during resolution.
+    pub fn expand_zones(&self, zones: Vec<Zone>) -> Result<Vec<Zone>, VeritasError> {
+        let mut inner_zones: Vec<libveritas::Zone> = zones.iter()
+            .map(zone_to_inner)
+            .collect::<Result<_, _>>()?;
+        self.inner.expand_zones(&mut inner_zones);
+        Ok(inner_zones.iter().map(zone_from_inner).collect())
     }
 }
 

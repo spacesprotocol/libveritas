@@ -156,8 +156,6 @@ pub struct Veritas {
     anchors: Vec<RootAnchor>,
     oldest_anchor: u32,
     newest_anchor: u32,
-    dev_mode: bool,
-    expand_names: bool,
 }
 
 #[derive(Copy, Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -692,8 +690,6 @@ impl Veritas {
             anchors: vec![],
             oldest_anchor: 0,
             newest_anchor: 0,
-            dev_mode: false,
-            expand_names: true,
         }
     }
 
@@ -707,24 +703,6 @@ impl Veritas {
         }
         self.anchors = anchors;
         Ok(self)
-    }
-
-    pub fn with_dev_mode(mut self, enabled: bool) -> Self {
-        self.dev_mode = enabled;
-        self
-    }
-
-    pub fn dev_mode(&self) -> bool {
-        self.dev_mode
-    }
-
-    pub fn with_expand_names(mut self, enabled: bool) -> Self {
-        self.expand_names = enabled;
-        self
-    }
-
-    pub fn expand_names(&self) -> bool {
-        self.expand_names
     }
 
     pub fn oldest_anchor(&self) -> u32 {
@@ -753,15 +731,22 @@ impl Veritas {
         }
     }
 
-    /// Verify a message and return verified zones along with sanitized message data.
+    /// Verify a message with default options (expand_names: true, dev_mode: false).
+    pub fn verify(&self, ctx: &msg::QueryContext, msg: crate::msg::Message) -> Result<VerifiedMessage, MessageError> {
+        self.verify_with_options(ctx, msg, true, false)
+    }
+
+    /// Verify a message with explicit options.
     ///
-    /// Uses `ctx.zones` for parent lookups and `is_better_than` comparison.
-    /// If `ctx.requests` is empty, verifies all handles in the message.
-    /// Otherwise, only verifies requested handles.
-    ///
-    /// Returns `VerifiedMessage` containing the best zone for each handle
-    /// and sanitized message data (only verified bundles/epochs/handles/receipts).
-    pub fn verify_message(&self, ctx: &msg::QueryContext, msg: crate::msg::Message) -> Result<VerifiedMessage, MessageError> {
+    /// - `expand_names`: rewrite numeric zone handles to human-readable form
+    /// - `dev_mode`: accept fake ZK receipts (for testing)
+    pub fn verify_with_options(
+        &self,
+        ctx: &msg::QueryContext,
+        msg: crate::msg::Message,
+        expand_names: bool,
+        dev_mode: bool,
+    ) -> Result<VerifiedMessage, MessageError> {
         let anchor = self.check_msg_anchor(&msg)?;
         self.check_msg_chain_proofs(&msg, &anchor)?;
         self.check_msg_duplicate_spaces(&msg)?;
@@ -771,14 +756,14 @@ impl Veritas {
 
         for bundle in msg.spaces {
             let (bundle_zones, verified_bundle) =
-                self.verify_bundle(ctx, &msg.chain, bundle)?;
+                self.verify_bundle(ctx, &msg.chain, dev_mode, bundle)?;
             zones.extend(bundle_zones);
             if let Some(vb) = verified_bundle {
                 verified_bundles.push(vb);
             }
         }
 
-        if self.expand_names {
+        if expand_names {
             let resolver = names::NameResolver::from_zones(&zones);
             resolver.expand_zones(&mut zones);
         }
@@ -797,6 +782,7 @@ impl Veritas {
         &self,
         ctx: &msg::QueryContext,
         chain: &msg::ChainProof,
+        dev_mode: bool,
         bundle: msg::Bundle,
     ) -> Result<(Vec<Zone>, Option<msg::Bundle>), MessageError> {
         let space = bundle.subject.clone();
@@ -814,7 +800,7 @@ impl Veritas {
             (Some(cached), Some(zone)) => {
                 zone.update_receipt_cache(cached);
                 if zone.is_better_than(cached).unwrap_or(false) {
-                    receipt_verified = maybe_verify_receipt(zone, bundle.receipt.as_ref(), &space, self.dev_mode)?;
+                    receipt_verified = maybe_verify_receipt(zone, bundle.receipt.as_ref(), &space, dev_mode)?;
                     zone
                 } else {
                     *cached
@@ -822,7 +808,7 @@ impl Veritas {
             }
             (Some(cached), None) => *cached,
             (None, Some(zone)) => {
-                receipt_verified = maybe_verify_receipt(zone, bundle.receipt.as_ref(), &space, self.dev_mode)?;
+                receipt_verified = maybe_verify_receipt(zone, bundle.receipt.as_ref(), &space, dev_mode)?;
                 zone
             }
             (None, None) => {

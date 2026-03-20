@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::sync::Mutex;
 use crate::cert::{Certificate, NumsSubtree};
 use crate::sname::{NameLike, SName};
 use crate::Zone;
@@ -136,6 +137,128 @@ fn build_2label(label_bytes: &[u8], space: &SLabel) -> Option<SName> {
     let label_str = std::str::from_utf8(label_bytes).ok()?;
     let label: crate::sname::Label = label_str.parse().ok()?;
     SName::join(&label, space).ok()
+}
+
+/// Tracks a single name being resolved.
+struct LookupEntry {
+    /// Original labels left-to-right, e.g. ["pancakes", "nested1", "alice", "bitcoin"]
+    labels: Vec<String>,
+    /// Index of the next subspace label to resolve (moves right-to-left).
+    cursor: usize,
+    /// The current space for the next lookup.
+    space: SLabel,
+    /// Whether this entry's current handle has been fetched and has no more levels.
+    done: bool,
+}
+
+impl LookupEntry {
+    fn new(name: &SName) -> Option<Self> {
+        let count = name.label_count();
+        if count < 2 {
+            return None;
+        }
+        let labels: Vec<String> = name.iter()
+            .map(|l| std::str::from_utf8(l).unwrap_or("").to_string())
+            .collect();
+        let space = name.space()?;
+        Some(Self {
+            labels,
+            cursor: count - 2,
+            space,
+            done: false,
+        })
+    }
+
+    fn current_handle(&self) -> Option<SName> {
+        build_2label(self.labels[self.cursor].as_bytes(), &self.space)
+    }
+
+    fn advance(&mut self, alias: SLabel) {
+        self.cursor -= 1;
+        self.space = alias;
+    }
+}
+
+struct LookupState {
+    entries: Vec<LookupEntry>,
+    resolver: NameResolver,
+}
+
+/// Batched iterative resolver for nested handle names.
+///
+/// Breaks down deep names into a sequence of 2-label lookups, batched by
+/// depth level. Uses `&self` throughout for FFI compatibility.
+///
+/// ```text
+/// let lookup = Lookup::new(vec!["pancakes.nested1.alice@bitcoin", "bob@nostr"]);
+/// let batch = lookup.start();         // → ["alice@bitcoin", "bob@nostr"]
+/// let zones = relay.resolveAll(batch);
+/// let batch = lookup.advance(&zones); // → ["nested1#800-12-12"]
+/// let zones2 = relay.resolveAll(batch);
+/// let batch = lookup.advance(&zones2); // → ["pancakes#822-88-22"]
+/// // ... until batch is empty
+/// lookup.expand_zones(&mut all_zones);
+/// ```
+pub struct Lookup {
+    state: Mutex<LookupState>,
+}
+
+impl Lookup {
+    pub fn new(names: Vec<SName>) -> Self {
+        let entries = names.iter()
+            .filter_map(|n| LookupEntry::new(n))
+            .collect();
+        Self {
+            state: Mutex::new(LookupState {
+                entries,
+                resolver: NameResolver::from_aliases(HashMap::new()),
+            }),
+        }
+    }
+
+    /// Returns the first batch of handles to look up.
+    pub fn start(&self) -> Vec<SName> {
+        let state = self.state.lock().unwrap();
+        state.entries.iter()
+            .filter_map(|e| e.current_handle())
+            .collect()
+    }
+
+    /// Feed zones from a resolveAll response. Returns the next batch.
+    /// Empty result means resolution is complete.
+    pub fn advance(&self, zones: &[Zone]) -> Vec<SName> {
+        let mut state = self.state.lock().unwrap();
+
+        for zone in zones {
+            if let Some(alias) = &zone.alias {
+                state.resolver.aliases.insert(zone.handle.clone(), alias.clone());
+                state.resolver.reverse.insert(alias.clone(), zone.handle.clone());
+            }
+        }
+
+        for entry in &mut state.entries {
+            if entry.done {
+                continue;
+            }
+            let Some(handle) = entry.current_handle() else { continue };
+            let Some(zone) = zones.iter().find(|z| z.handle == handle) else { continue };
+            match &zone.alias {
+                Some(alias) if entry.cursor > 0 => entry.advance(alias.clone()),
+                _ => entry.done = true,
+            }
+        }
+
+        state.entries.iter()
+            .filter(|e| !e.done)
+            .filter_map(|e| e.current_handle())
+            .collect()
+    }
+
+    /// Expand zone handles using the alias map accumulated during resolution.
+    pub fn expand_zones(&self, zones: &mut [Zone]) {
+        let state = self.state.lock().unwrap();
+        state.resolver.expand_zones(zones);
+    }
 }
 
 #[cfg(test)]
@@ -304,5 +427,107 @@ mod tests {
 
         let flat = SName::from_str("nested1#800-12-12").unwrap();
         assert_eq!(flattener.expand(&flat), flat);
+    }
+
+    // -- lookup tests --
+
+    #[test]
+    fn lookup_2_labels_resolves_immediately() {
+        let lookup = Lookup::new(vec![
+            SName::from_str("alice@bitcoin").unwrap(),
+        ]);
+        let batch = lookup.start();
+        assert_eq!(batch, vec![SName::from_str("alice@bitcoin").unwrap()]);
+
+        // No alias needed — 2 labels, nothing to advance
+        let zones = vec![make_zone("alice@bitcoin", None)];
+        let next = lookup.advance(&zones);
+        assert!(next.is_empty());
+    }
+
+    #[test]
+    fn lookup_3_labels() {
+        // nested1.alice@bitcoin requires: alice@bitcoin → #800-12-12 → nested1#800-12-12
+        let lookup = Lookup::new(vec![
+            SName::from_str("nested1.alice@bitcoin").unwrap(),
+        ]);
+
+        let batch = lookup.start();
+        assert_eq!(batch, vec![SName::from_str("alice@bitcoin").unwrap()]);
+
+        let zones = vec![make_zone("alice@bitcoin", Some(SNumeric::new(800, 12, 12)))];
+        let next = lookup.advance(&zones);
+        assert_eq!(next, vec![SName::from_str("nested1#800-12-12").unwrap()]);
+
+        let zones2 = vec![make_zone("nested1#800-12-12", None)];
+        let done = lookup.advance(&zones2);
+        assert!(done.is_empty());
+    }
+
+    #[test]
+    fn lookup_4_labels() {
+        let lookup = Lookup::new(vec![
+            SName::from_str("pancakes.nested1.alice@bitcoin").unwrap(),
+        ]);
+
+        let batch = lookup.start();
+        assert_eq!(batch, vec![SName::from_str("alice@bitcoin").unwrap()]);
+
+        let zones = vec![make_zone("alice@bitcoin", Some(SNumeric::new(800, 12, 12)))];
+        let next = lookup.advance(&zones);
+        assert_eq!(next, vec![SName::from_str("nested1#800-12-12").unwrap()]);
+
+        let zones2 = vec![make_zone("nested1#800-12-12", Some(SNumeric::new(822, 88, 22)))];
+        let next2 = lookup.advance(&zones2);
+        assert_eq!(next2, vec![SName::from_str("pancakes#822-88-22").unwrap()]);
+
+        let zones3 = vec![make_zone("pancakes#822-88-22", None)];
+        let done = lookup.advance(&zones3);
+        assert!(done.is_empty());
+    }
+
+    #[test]
+    fn lookup_mixed_depths() {
+        // Two names with different depths
+        let lookup = Lookup::new(vec![
+            SName::from_str("nested1.alice@bitcoin").unwrap(), // 3 labels
+            SName::from_str("bob@nostr").unwrap(),             // 2 labels
+        ]);
+
+        let batch = lookup.start();
+        assert_eq!(batch.len(), 2);
+        assert!(batch.contains(&SName::from_str("alice@bitcoin").unwrap()));
+        assert!(batch.contains(&SName::from_str("bob@nostr").unwrap()));
+
+        // Both resolve. bob@nostr is done (2 labels), alice@bitcoin has alias.
+        let zones = vec![
+            make_zone("alice@bitcoin", Some(SNumeric::new(800, 12, 12))),
+            make_zone("bob@nostr", None),
+        ];
+        let next = lookup.advance(&zones);
+        // Only nested1#800-12-12 remains
+        assert_eq!(next, vec![SName::from_str("nested1#800-12-12").unwrap()]);
+
+        let zones2 = vec![make_zone("nested1#800-12-12", None)];
+        let done = lookup.advance(&zones2);
+        assert!(done.is_empty());
+    }
+
+    #[test]
+    fn lookup_expand_zones_at_end() {
+        let lookup = Lookup::new(vec![
+            SName::from_str("nested1.alice@bitcoin").unwrap(),
+        ]);
+
+        let _ = lookup.start();
+        let zones = vec![make_zone("alice@bitcoin", Some(SNumeric::new(800, 12, 12)))];
+        let _ = lookup.advance(&zones);
+
+        // Now expand a zone with numeric handle
+        let mut zones_to_expand = vec![
+            make_zone("nested1#800-12-12", None),
+        ];
+        lookup.expand_zones(&mut zones_to_expand);
+        assert_eq!(zones_to_expand[0].handle, SName::from_str("nested1.alice@bitcoin").unwrap());
     }
 }

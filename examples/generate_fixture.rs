@@ -41,7 +41,7 @@ fn main() {
     // Native verify to confirm the fixture is valid
     let veritas = state.veritas();
     let ctx = QueryContext::new();
-    let result = veritas.verify_message(&ctx, msg).unwrap();
+    let result = veritas.verify_with_options(&ctx, msg, false, true).unwrap();
     println!("\nnative verify OK: {} zones", result.zones.len());
     for z in &result.zones {
         println!("  {} -> {}", z.handle, z.sovereignty);

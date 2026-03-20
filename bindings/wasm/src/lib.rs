@@ -273,16 +273,6 @@ impl Veritas {
         Ok(Veritas { inner })
     }
 
-    #[wasm_bindgen(js_name = "withOptions")]
-    pub fn with_options(anchors: &Anchors, expand_names: bool, dev_mode: bool) -> Result<Veritas, JsError> {
-        let inner = libveritas::Veritas::new()
-            .with_anchors(anchors.inner.clone())
-            .map_err(|e| JsError::new(&e.to_string()))?
-            .with_expand_names(expand_names)
-            .with_dev_mode(dev_mode);
-        Ok(Veritas { inner })
-    }
-
     pub fn oldest_anchor(&self) -> u32 {
         self.inner.oldest_anchor()
     }
@@ -304,17 +294,32 @@ impl Veritas {
         self.inner.sovereignty_for(commitment_height).to_string()
     }
 
-    /// Verify a message against a query context.
-    pub fn verify_message(
+    /// Verify a message with default options (expand_names: true, dev_mode: false).
+    pub fn verify(
         &self,
         ctx: &QueryContext,
         msg: &Message,
     ) -> Result<VerifiedMessage, JsError> {
         let inner = self
             .inner
-            .verify_message(&ctx.inner, msg.inner.clone())
+            .verify(&ctx.inner, msg.inner.clone())
             .map_err(|e| JsError::new(&e.to_string()))?;
+        Ok(VerifiedMessage { inner })
+    }
 
+    /// Verify a message with explicit options.
+    #[wasm_bindgen(js_name = "verifyWithOptions")]
+    pub fn verify_with_options(
+        &self,
+        ctx: &QueryContext,
+        msg: &Message,
+        expand_names: bool,
+        dev_mode: bool,
+    ) -> Result<VerifiedMessage, JsError> {
+        let inner = self
+            .inner
+            .verify_with_options(&ctx.inner, msg.inner.clone(), expand_names, dev_mode)
+            .map_err(|e| JsError::new(&e.to_string()))?;
         Ok(VerifiedMessage { inner })
     }
 }
@@ -363,6 +368,54 @@ impl VerifiedMessage {
     /// Get the verified message as borsh bytes.
     pub fn message_bytes(&self) -> Vec<u8> {
         self.inner.message.to_bytes()
+    }
+}
+
+/// Batched iterative resolver for nested handle names.
+#[wasm_bindgen]
+pub struct Lookup {
+    inner: libveritas::names::Lookup,
+}
+
+#[wasm_bindgen]
+impl Lookup {
+    /// Create a lookup from an array of handle name strings.
+    #[wasm_bindgen(constructor)]
+    pub fn new(names: Vec<String>) -> Result<Lookup, JsError> {
+        let snames: Vec<SName> = names.iter()
+            .map(|n| SName::from_str(n).map_err(|e| JsError::new(&format!("invalid name '{}': {}", n, e))))
+            .collect::<Result<_, _>>()?;
+        Ok(Lookup { inner: libveritas::names::Lookup::new(snames) })
+    }
+
+    /// Returns the first batch of handles to look up.
+    pub fn start(&self) -> Vec<String> {
+        self.inner.start().iter().map(|s| s.to_string()).collect()
+    }
+
+    /// Feed zones from a resolveAll response.
+    /// Returns the next batch of handles to look up (empty = done).
+    pub fn advance(&self, zones: JsValue) -> Result<Vec<String>, JsError> {
+        let array = js_sys::Array::from(&zones);
+        let inner_zones: Vec<libveritas::Zone> = (0..array.length())
+            .map(|i| zone_from_js(&array.get(i)))
+            .collect::<Result<_, _>>()?;
+        Ok(self.inner.advance(&inner_zones).iter().map(|s| s.to_string()).collect())
+    }
+
+    /// Expand zone handles using the alias map accumulated during resolution.
+    #[wasm_bindgen(js_name = "expandZones")]
+    pub fn expand_zones(&self, zones: JsValue) -> Result<JsValue, JsError> {
+        let array = js_sys::Array::from(&zones);
+        let mut inner_zones: Vec<libveritas::Zone> = (0..array.length())
+            .map(|i| zone_from_js(&array.get(i)))
+            .collect::<Result<_, _>>()?;
+        self.inner.expand_zones(&mut inner_zones);
+        let result = js_sys::Array::new();
+        for z in &inner_zones {
+            result.push(&zone_to_js(z)?);
+        }
+        Ok(result.into())
     }
 }
 

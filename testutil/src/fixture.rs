@@ -169,7 +169,6 @@ impl ChainState {
         anchors.reverse();
         Veritas::new()
             .with_anchors(anchors).expect("valid anchors")
-            .with_dev_mode(true)
     }
 
     pub fn message(&self, bundles: Vec<Bundle>) -> msg::Message {
