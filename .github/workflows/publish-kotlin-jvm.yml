@@ -225,7 +225,7 @@ jobs:
           AUTH=$(echo -n "${{ secrets.CENTRAL_PORTAL_USERNAME }}:${{ secrets.CENTRAL_PORTAL_PASSWORD }}" | base64)
           curl -f -X POST \
             -H "Authorization: Bearer $AUTH" \
-            "https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/org.spacesprotocol"
+            "https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/org.spacesprotocol?publishing_type=automatic"
 
       - name: Publish to libveritas-kotlin repo
         env:
