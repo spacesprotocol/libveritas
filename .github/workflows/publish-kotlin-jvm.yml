@@ -1,0 +1,236 @@
+name: Publish Kotlin JVM
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: linux-x86-64
+            lib: liblibveritas_uniffi.so
+          - runner: macos-latest
+            target: aarch64-apple-darwin
+            artifact: darwin-aarch64
+            lib: liblibveritas_uniffi.dylib
+          - runner: macos-13
+            target: x86_64-apple-darwin
+            artifact: darwin-x86-64
+            lib: liblibveritas_uniffi.dylib
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build shared library
+        run: cargo build -p libveritas-uniffi --release --target ${{ matrix.target }}
+
+      - name: Upload native library
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: target/${{ matrix.target }}/release/${{ matrix.lib }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build library for bindgen
+        run: cargo build -p libveritas-uniffi --release
+
+      - name: Generate Kotlin bindings
+        run: |
+          cargo run --bin uniffi-bindgen generate \
+            --library target/release/liblibveritas_uniffi.so \
+            --language kotlin \
+            --out-dir kotlin-publish/src/main/kotlin
+
+      - name: Download all native libraries
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Organize native libraries for JNA
+        run: |
+          mkdir -p kotlin-publish/src/main/resources/linux-x86-64
+          mkdir -p kotlin-publish/src/main/resources/darwin-aarch64
+          mkdir -p kotlin-publish/src/main/resources/darwin-x86-64
+
+          cp artifacts/linux-x86-64/liblibveritas_uniffi.so     kotlin-publish/src/main/resources/linux-x86-64/
+          cp artifacts/darwin-aarch64/liblibveritas_uniffi.dylib kotlin-publish/src/main/resources/darwin-aarch64/
+          cp artifacts/darwin-x86-64/liblibveritas_uniffi.dylib  kotlin-publish/src/main/resources/darwin-x86-64/
+
+      - name: Set version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="0.0.0-dev.$(date +%Y%m%d%H%M%S)"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Create build files
+        run: |
+          cat > kotlin-publish/build.gradle.kts << 'GRADLE'
+          import java.util.Base64
+
+          plugins {
+              kotlin("jvm") version "2.0.21"
+              `maven-publish`
+              signing
+          }
+
+          val libVersion: String = project.findProperty("version") as? String ?: "0.1.0"
+
+          repositories {
+              mavenCentral()
+          }
+
+          dependencies {
+              implementation("net.java.dev.jna:jna:5.14.0")
+          }
+
+          kotlin {
+              jvmToolchain(17)
+          }
+
+          publishing {
+              publications {
+                  register<MavenPublication>("release") {
+                      groupId = "org.spacesprotocol"
+                      artifactId = "libveritas-jvm"
+                      version = libVersion
+
+                      from(components["java"])
+
+                      pom {
+                          name.set("libveritas-jvm")
+                          description.set("Veritas verification library for JVM/Desktop")
+                          url.set("https://github.com/spacesprotocol/libveritas")
+
+                          licenses {
+                              license {
+                                  name.set("MIT")
+                                  url.set("https://github.com/spacesprotocol/libveritas/blob/main/LICENSE")
+                              }
+                          }
+
+                          developers {
+                              developer {
+                                  id.set("spacesprotocol")
+                                  name.set("spacesprotocol")
+                              }
+                          }
+
+                          scm {
+                              connection.set("scm:git:git://github.com/spacesprotocol/libveritas.git")
+                              developerConnection.set("scm:git:ssh://github.com/spacesprotocol/libveritas.git")
+                              url.set("https://github.com/spacesprotocol/libveritas")
+                          }
+                      }
+                  }
+              }
+
+              repositories {
+                  maven {
+                      name = "CentralPortal"
+                      url = uri("https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/")
+                      credentials(HttpHeaderCredentials::class) {
+                          name = "Authorization"
+                          val user = System.getenv("CENTRAL_PORTAL_USERNAME") ?: ""
+                          val pass = System.getenv("CENTRAL_PORTAL_PASSWORD") ?: ""
+                          value = "Bearer " + Base64.getEncoder().encodeToString("$user:$pass".toByteArray())
+                      }
+                      authentication {
+                          create<HttpHeaderAuthentication>("header")
+                      }
+                  }
+              }
+          }
+
+          signing {
+              val signingKey = System.getenv("GPG_SIGNING_KEY")
+              val signingPassword = System.getenv("GPG_PASSPHRASE")
+              if (signingKey != null && signingPassword != null) {
+                  useInMemoryPgpKeys(signingKey, signingPassword)
+                  sign(publishing.publications["release"])
+              }
+          }
+          GRADLE
+
+          cat > kotlin-publish/settings.gradle.kts << 'SETTINGS'
+          pluginManagement {
+              repositories {
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          rootProject.name = "libveritas-jvm"
+          SETTINGS
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Build and publish JAR to Maven Central
+        working-directory: kotlin-publish
+        run: |
+          gradle wrapper
+          ./gradlew build publish \
+            -Pversion="$VERSION"
+        env:
+          CENTRAL_PORTAL_USERNAME: ${{ secrets.CENTRAL_PORTAL_USERNAME }}
+          CENTRAL_PORTAL_PASSWORD: ${{ secrets.CENTRAL_PORTAL_PASSWORD }}
+          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Finalize deployment on Central Portal
+        run: |
+          AUTH=$(echo -n "${{ secrets.CENTRAL_PORTAL_USERNAME }}:${{ secrets.CENTRAL_PORTAL_PASSWORD }}" | base64)
+          curl -f -X POST \
+            -H "Authorization: Bearer $AUTH" \
+            "https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/org.spacesprotocol"
+
+      - name: Publish to libveritas-kotlin repo
+        env:
+          GH_TOKEN: ${{ secrets.KOTLIN_PUBLISH_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="v0.0.0-dev.$(date +%Y%m%d%H%M%S)"
+          fi
+
+          cd kotlin-publish
+
+          git init -b main
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Release ${VERSION}"
+          git tag "${VERSION}"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/spacesprotocol/libveritas-kotlin.git"
+          git push origin main --force
+          git push origin "${VERSION}"

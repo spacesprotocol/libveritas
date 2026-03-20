@@ -45,7 +45,8 @@
   },
   "peerDependencies": {
     "react": "*",
-    "react-native": ">=0.74"
+    "react-native": ">=0.74",
+    "uniffi-bindgen-react-native": "0.29.3-1"
   },
   "codegenConfig": {
     "name": "RNLibveritasSpec",
