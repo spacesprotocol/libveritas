@@ -10,20 +10,34 @@ permissions:
   contents: read
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      py_version: ${{ steps.ver.outputs.py_version }}
+    steps:
+      - id: ver
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="0.0.0-dev.$(date +%Y%m%d%H%M%S)"
+          fi
+          PY_VERSION=$(echo "$VERSION" | sed 's/-dev\./\.dev/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "py_version=$PY_VERSION" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: version
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         include:
           - os: ubuntu-latest
-            args: ""
             manylinux: auto
           - os: macos-latest
-            args: ""
             manylinux: "off"
           - os: windows-latest
-            args: ""
             manylinux: "off"
     steps:
       - uses: actions/checkout@v4
@@ -37,15 +51,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Set version from tag
+      - name: Set version
         shell: bash
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
-            VERSION="0.0.0-dev.$(date +%Y%m%d%H%M%S)"
-          fi
+          VERSION="${{ needs.version.outputs.version }}"
+          PY_VERSION="${{ needs.version.outputs.py_version }}"
           sed -i.bak "s/^version = \"0.1.0\"/version = \"$VERSION\"/" bindings/python/Cargo.toml
-          PY_VERSION=$(echo "$VERSION" | sed 's/-dev\./\.dev/')
           sed -i.bak "s/^version = \"0.1.0\"/version = \"$PY_VERSION\"/" bindings/python/pyproject.toml
 
       - name: Build wheels
