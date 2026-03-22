@@ -54,7 +54,7 @@ impl NameResolver {
         let mut aliases = HashMap::new();
         for zone in zones {
             if let Some(alias) = &zone.alias {
-                aliases.insert(zone.handle.clone(), alias.clone());
+                aliases.insert(zone.canonical.clone(), alias.clone());
             }
         }
         Self::from_aliases(aliases)
@@ -124,10 +124,11 @@ impl NameResolver {
         SName::from_str(&expanded).unwrap_or_else(|_| name.clone())
     }
 
-    /// Expand zone handles in place.
+    /// Set human-readable handle names on zones.
+    /// `canonical` stays unchanged; `handle` gets the expanded form.
     pub fn expand_zones(&self, zones: &mut [Zone]) {
         for zone in zones {
-            zone.handle = self.expand(&zone.handle);
+            zone.handle = self.expand(&zone.canonical);
         }
     }
 }
@@ -231,8 +232,8 @@ impl Lookup {
 
         for zone in zones {
             if let Some(alias) = &zone.alias {
-                state.resolver.aliases.insert(zone.handle.clone(), alias.clone());
-                state.resolver.reverse.insert(alias.clone(), zone.handle.clone());
+                state.resolver.aliases.insert(zone.canonical.clone(), alias.clone());
+                state.resolver.reverse.insert(alias.clone(), zone.canonical.clone());
             }
         }
 
@@ -241,7 +242,7 @@ impl Lookup {
                 continue;
             }
             let Some(handle) = entry.current_handle() else { continue };
-            let Some(zone) = zones.iter().find(|z| z.handle == handle) else { continue };
+            let Some(zone) = zones.iter().find(|z| z.canonical == handle) else { continue };
             match &zone.alias {
                 Some(alias) if entry.cursor > 0 => entry.advance(alias.clone()),
                 _ => entry.done = true,
@@ -376,10 +377,12 @@ mod tests {
 
     fn make_zone(handle: &str, alias: Option<SNumeric>) -> Zone {
         use spaces_protocol::bitcoin::ScriptBuf;
+        let sname = SName::from_str(handle).unwrap();
         Zone {
             anchor: 0,
             sovereignty: crate::SovereigntyState::Sovereign,
-            handle: SName::from_str(handle).unwrap(),
+            canonical: sname.clone(),
+            handle: sname,
             alias: alias.map(|n| n.to_slabel()),
             script_pubkey: ScriptBuf::from_bytes(vec![0x51, 0x20, 0x00]),
             fallback_records: None,

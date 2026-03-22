@@ -7,6 +7,15 @@ use libveritas::sname::SName;
 use serde::Serialize;
 use spaces_nums::RootAnchor;
 
+#[wasm_bindgen(js_name = "VERIFY_DEFAULT")]
+pub fn verify_default() -> u32 { libveritas::VERIFY_DEFAULT }
+
+#[wasm_bindgen(js_name = "VERIFY_DEV_MODE")]
+pub fn verify_dev_mode() -> u32 { libveritas::VERIFY_DEV_MODE }
+
+#[wasm_bindgen(js_name = "VERIFY_ENABLE_SNARK")]
+pub fn verify_enable_snark() -> u32 { libveritas::VERIFY_ENABLE_SNARK }
+
 /// Serialize through JSON to get human-readable serde output
 /// (hex hashes, string names, etc.) as a native JS object.
 fn to_js<T: Serialize>(val: &T) -> Result<JsValue, JsError> {
@@ -305,7 +314,7 @@ impl Veritas {
         self.inner.sovereignty_for(commitment_height).to_string()
     }
 
-    /// Verify a message with default options (expand_names: true, dev_mode: false).
+    /// Verify a message with default options.
     pub fn verify(
         &self,
         ctx: &QueryContext,
@@ -318,18 +327,17 @@ impl Veritas {
         Ok(VerifiedMessage { inner })
     }
 
-    /// Verify a message with explicit options.
+    /// Verify a message with option flags (combine with bitwise OR).
     #[wasm_bindgen(js_name = "verifyWithOptions")]
     pub fn verify_with_options(
         &self,
         ctx: &QueryContext,
         msg: &Message,
-        expand_names: bool,
-        dev_mode: bool,
+        options: u32,
     ) -> Result<VerifiedMessage, JsError> {
         let inner = self
             .inner
-            .verify_with_options(&ctx.inner, msg.inner.clone(), expand_names, dev_mode)
+            .verify_with_options(&ctx.inner, msg.inner.clone(), options)
             .map_err(|e| JsError::new(&e.to_string()))?;
         Ok(VerifiedMessage { inner })
     }

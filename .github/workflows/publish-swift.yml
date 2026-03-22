@@ -44,8 +44,8 @@ jobs:
       - name: Prepare headers and modulemap
         run: |
           mkdir -p headers
-          cp swift-bindings/libveritas_uniffiFFI.h headers/
-          cp swift-bindings/libveritas_uniffiFFI.modulemap headers/module.modulemap
+          cp swift-bindings/LibveritasFFI.h headers/
+          cp swift-bindings/LibveritasFFI.modulemap headers/module.modulemap
 
       - name: Create fat binaries with lipo
         run: |
@@ -97,7 +97,7 @@ jobs:
           CHECKSUM="${{ steps.checksum.outputs.checksum }}"
 
           mkdir -p swift-publish/Sources/Libveritas
-          cp swift-bindings/libveritas_uniffi.swift swift-publish/Sources/Libveritas/
+          cp swift-bindings/Libveritas.swift swift-publish/Sources/Libveritas/
 
           # Generate Package.swift pointing to the release asset on the main repo
           cat > swift-publish/Package.swift << EOF

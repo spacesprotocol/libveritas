@@ -513,10 +513,12 @@ impl TestHandleTree {
             records: None,
         };
 
+        let h = sname(&format!("{}{}", name, self.space));
         let zone = Zone {
             anchor: 0,
             sovereignty: SovereigntyState::Dependent,
-            handle: sname(&format!("{}{}", name, self.space)),
+            canonical: h.clone(),
+            handle: h,
             alias: None,
             script_pubkey: genesis_spk,
             fallback_records: None,

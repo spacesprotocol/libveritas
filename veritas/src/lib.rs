@@ -26,6 +26,11 @@ pub mod names;
 
 pub use sip7;
 
+/// Verification option flags (combine with bitwise OR).
+pub const VERIFY_DEFAULT: u32 = 0;
+pub const VERIFY_DEV_MODE: u32 = 1 << 0;
+pub const VERIFY_ENABLE_SNARK: u32 = 1 << 1;
+
 /// Result of verifying a message.
 ///
 /// Contains the verified zones and the original message data.
@@ -40,30 +45,34 @@ impl VerifiedMessage {
     ///
     /// Returns `None` if the handle was not verified in this message.
     pub fn certificate(&self, handle: &SName) -> Option<Certificate> {
-        if !self.zones.iter().any(|z| &z.handle == handle) {
+        if !self.zones.iter().any(|z| &z.canonical == handle || &z.handle == handle) {
             return None;
         }
 
-        let space = handle.space()?;
+        // Use canonical form for bundle lookup
+        let canonical = self.zones.iter()
+            .find(|z| &z.canonical == handle || &z.handle == handle)
+            .map(|z| &z.canonical)?;
+        let space = canonical.space()?;
         let bundle = self.message.spaces.iter().find(|b| b.subject == space)?;
 
-        if handle.is_single_label() {
+        if canonical.is_single_label() {
             return Some(Certificate::new(
-                handle.clone(),
+                canonical.clone(),
                 Witness::Root {
                     receipt: bundle.receipt.clone(),
                 },
             ));
         }
 
-        let label = handle.subspace()?;
+        let label = canonical.subspace()?;
 
         for epoch in &bundle.epochs {
             let Some(h) = epoch.handles.iter().find(|h| h.name == label) else {
                 continue;
             };
             return Some(Certificate::new(
-                handle.clone(),
+                canonical.clone(),
                 Witness::Leaf {
                     genesis_spk: h.genesis_spk.clone(),
                     handles: epoch.tree.clone(),
@@ -139,7 +148,7 @@ impl<'a> Iterator for CertificateIter<'a> {
 
             // Emit root cert if zone exists
             let root_handle = SName::from_space(&bundle.subject).ok()?;
-            if self.zones.iter().any(|z| z.handle == root_handle) {
+            if self.zones.iter().any(|z| z.canonical == root_handle) {
                 return Some(Certificate::new(
                     root_handle,
                     Witness::Root {
@@ -193,9 +202,12 @@ pub struct Zone {
     pub anchor: u32,
     /// The sovereignty state indicating finality of the zone's commitment.
     pub sovereignty: SovereigntyState,
-    /// The space handle this zone represents (e.g., "alice@bitcoin").
+    /// Human-readable name (e.g., "nested1.alice@bitcoin").
+    /// Same as `canonical` when the handle has no numeric space.
     pub handle: SName,
-    /// Set if this zone has a num alias
+    /// Canonical on-chain form (e.g., "nested1#800-12-12").
+    pub canonical: SName,
+    /// Set if this zone has a num alias.
     pub alias: Option<SLabel>,
     /// The current script pubkey that controls this handle.
     pub script_pubkey: ScriptBuf,
@@ -354,6 +366,7 @@ impl BorshSerialize for Zone {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         BorshSerialize::serialize(&self.anchor, writer)?;
         BorshSerialize::serialize(&self.sovereignty, writer)?;
+        BorshSerialize::serialize(&self.canonical, writer)?;
         BorshSerialize::serialize(&self.handle, writer)?;
         BorshSerialize::serialize(&self.alias, writer)?;
         BorshSerialize::serialize(&self.script_pubkey.as_bytes().to_vec(), writer)?;
@@ -370,6 +383,7 @@ impl BorshDeserialize for Zone {
     fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
         let anchor = u32::deserialize_reader(reader)?;
         let sovereignty = SovereigntyState::deserialize_reader(reader)?;
+        let canonical = SName::deserialize_reader(reader)?;
         let handle = SName::deserialize_reader(reader)?;
         let alias = Option::<SLabel>::deserialize_reader(reader)?;
         let spk_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
@@ -382,6 +396,7 @@ impl BorshDeserialize for Zone {
             anchor,
             sovereignty,
             handle,
+            canonical,
             alias,
             script_pubkey: ScriptBuf::from_bytes(spk_bytes),
             fallback_records: fallback_bytes.map(sip7::RecordSet::new),
@@ -518,7 +533,7 @@ impl Zone {
     ///
     /// Returns an error if the zones are for different handles.
     pub fn is_better_than(&self, other: &Self) -> Result<bool, ZoneCompareError> {
-        if self.handle != other.handle {
+        if self.canonical != other.canonical {
             return Err(ZoneCompareError::DifferentHandles);
         }
 
@@ -610,11 +625,21 @@ impl Zone {
     }
 }
 
-fn verify_receipt(ci: &mut CommitmentInfo, space: &SLabel, receipt: &Receipt, dev_mode: bool) -> Result<(), MessageError> {
+fn verify_receipt(ci: &mut CommitmentInfo, space: &SLabel, receipt: &Receipt, options: u32) -> Result<(), MessageError> {
     let space_str = space.to_string();
     let zkc = decode_journal(receipt, space)?;
     verify_zk_journal_matches_onchain(space, &zkc, &ci.onchain)?;
-    let ctx = VerifierContext::default().with_dev_mode(dev_mode);
+    let dev_mode = options & VERIFY_DEV_MODE != 0;
+    let mut ctx = VerifierContext::default().with_dev_mode(dev_mode);
+    if options & VERIFY_ENABLE_SNARK == 0 {
+        if matches!(receipt.inner, risc0_zkvm::InnerReceipt::Groth16(_)) {
+            return Err(MessageError::ReceiptInvalid {
+                space: space_str,
+                reason: "SNARK receipts require VERIFY_ENABLE_SNARK".to_string(),
+            });
+        }
+        ctx.groth16_verifier_parameters = None;
+    }
     let image_id = match zkc.kind {
         CommitmentKind::Fold => constants::FOLD_ID,
         CommitmentKind::Step => constants::STEP_ID,
@@ -731,21 +756,22 @@ impl Veritas {
         }
     }
 
-    /// Verify a message with default options (expand_names: true, dev_mode: false).
+    /// Verify a message with default options.
     pub fn verify(&self, ctx: &msg::QueryContext, msg: crate::msg::Message) -> Result<VerifiedMessage, MessageError> {
-        self.verify_with_options(ctx, msg, true, false)
+        self.verify_with_options(ctx, msg, VERIFY_DEFAULT)
     }
 
-    /// Verify a message with explicit options.
+    /// Verify a message with option flags.
     ///
-    /// - `expand_names`: rewrite numeric zone handles to human-readable form
-    /// - `dev_mode`: accept fake ZK receipts (for testing)
+    /// Flags can be combined with bitwise OR:
+    /// - `VERIFY_DEFAULT` (0): standard verification
+    /// - `VERIFY_DEV_MODE`: accept fake ZK receipts (for testing)
+    /// - `VERIFY_ENABLE_SNARK`: allow Groth16 SNARK receipts (disabled by default)
     pub fn verify_with_options(
         &self,
         ctx: &msg::QueryContext,
         msg: crate::msg::Message,
-        expand_names: bool,
-        dev_mode: bool,
+        options: u32,
     ) -> Result<VerifiedMessage, MessageError> {
         let anchor = self.check_msg_anchor(&msg)?;
         self.check_msg_chain_proofs(&msg, &anchor)?;
@@ -756,17 +782,15 @@ impl Veritas {
 
         for bundle in msg.spaces {
             let (bundle_zones, verified_bundle) =
-                self.verify_bundle(ctx, &msg.chain, dev_mode, bundle)?;
+                self.verify_bundle(ctx, &msg.chain, options, bundle)?;
             zones.extend(bundle_zones);
             if let Some(vb) = verified_bundle {
                 verified_bundles.push(vb);
             }
         }
 
-        if expand_names {
-            let resolver = names::NameResolver::from_zones(&zones);
-            resolver.expand_zones(&mut zones);
-        }
+        let resolver = names::NameResolver::from_zones(&zones);
+        resolver.expand_zones(&mut zones);
 
         Ok(VerifiedMessage {
             zones,
@@ -782,7 +806,7 @@ impl Veritas {
         &self,
         ctx: &msg::QueryContext,
         chain: &msg::ChainProof,
-        dev_mode: bool,
+        options: u32,
         bundle: msg::Bundle,
     ) -> Result<(Vec<Zone>, Option<msg::Bundle>), MessageError> {
         let space = bundle.subject.clone();
@@ -800,7 +824,7 @@ impl Veritas {
             (Some(cached), Some(zone)) => {
                 zone.update_receipt_cache(cached);
                 if zone.is_better_than(cached).unwrap_or(false) {
-                    receipt_verified = maybe_verify_receipt(zone, bundle.receipt.as_ref(), &space, dev_mode)?;
+                    receipt_verified = maybe_verify_receipt(zone, bundle.receipt.as_ref(), &space, options)?;
                     zone
                 } else {
                     *cached
@@ -808,7 +832,7 @@ impl Veritas {
             }
             (Some(cached), None) => *cached,
             (None, Some(zone)) => {
-                receipt_verified = maybe_verify_receipt(zone, bundle.receipt.as_ref(), &space, dev_mode)?;
+                receipt_verified = maybe_verify_receipt(zone, bundle.receipt.as_ref(), &space, options)?;
                 zone
             }
             (None, None) => {
@@ -1049,6 +1073,7 @@ impl Veritas {
         let mut z = Zone {
             anchor: chain.anchor.height,
             sovereignty: SovereigntyState::Sovereign,
+            canonical: handle.clone(),
             handle,
             alias: None,
             script_pubkey: spk,
@@ -1157,6 +1182,7 @@ fn verify_temporary_handle(
     let zone = Zone {
         anchor: anchor_height,
         sovereignty: SovereigntyState::Dependent,
+        canonical: subject.clone(),
         handle: subject.clone(),
         alias: None,
         script_pubkey: handle.genesis_spk.clone(),
@@ -1229,6 +1255,7 @@ fn verify_final_handle(
     let zone = Zone {
         anchor: anchor_height,
         sovereignty,
+        canonical: subject.clone(),
         handle: subject.clone(),
         alias,
         script_pubkey: spk,
@@ -1419,7 +1446,7 @@ impl std::error::Error for MessageError {}
 
 /// Push the better zone: if cached exists and is better, push cached; otherwise push the new zone.
 fn push_best_zone(ctx: &msg::QueryContext, zones: &mut Vec<Zone>, zone: Zone) {
-    let Some(cached) = ctx.get_zone(&zone.handle) else {
+    let Some(cached) = ctx.get_zone(&zone.canonical) else {
         zones.push(zone);
         return;
     };
@@ -1436,13 +1463,13 @@ fn maybe_verify_receipt(
     zone: &mut Zone,
     receipt: Option<&risc0_zkvm::Receipt>,
     space: &SLabel,
-    dev_mode: bool,
+    options: u32,
 ) -> Result<bool, MessageError> {
     let Some(ci) = zone.requires_receipt() else {
         return Ok(false);
     };
     let receipt = receipt.ok_or_else(|| MessageError::ReceiptRequired { space: space.to_string() })?;
-    verify_receipt(ci, space, receipt, dev_mode)?;
+    verify_receipt(ci, space, receipt, options)?;
     Ok(true)
 }
 

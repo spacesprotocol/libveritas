@@ -114,6 +114,7 @@ pub struct Zone {
     pub anchor: u32,
     pub sovereignty: String,
     pub handle: String,
+    pub canonical: String,
     pub alias: Option<String>,
     pub script_pubkey: Vec<u8>,
     pub records: Option<Vec<u8>>,
@@ -127,6 +128,7 @@ fn zone_from_inner(z: &libveritas::Zone) -> Zone {
         anchor: z.anchor,
         sovereignty: z.sovereignty.to_string(),
         handle: z.handle.to_string(),
+        canonical: z.canonical.to_string(),
         alias: z.alias.as_ref().map(|a| a.to_string()),
         script_pubkey: z.script_pubkey.as_bytes().to_vec(),
         records: z.records.as_ref().map(|d| d.as_slice().to_vec()),
@@ -157,6 +159,9 @@ fn zone_from_inner(z: &libveritas::Zone) -> Zone {
 fn zone_to_inner(z: &Zone) -> Result<libveritas::Zone, VeritasError> {
     let handle = SName::from_str(&z.handle).map_err(|e| VeritasError::InvalidInput {
         msg: format!("invalid handle: {e}"),
+    })?;
+    let canonical = SName::from_str(&z.canonical).map_err(|e| VeritasError::InvalidInput {
+        msg: format!("invalid canonical: {e}"),
     })?;
     let alias = z.alias.as_ref()
         .map(|a| SLabel::from_str_unprefixed(a))
@@ -217,6 +222,7 @@ fn zone_to_inner(z: &Zone) -> Result<libveritas::Zone, VeritasError> {
             _ => libveritas::SovereigntyState::Dependent,
         },
         handle,
+        canonical,
         alias,
         script_pubkey: ScriptBuf::from_bytes(z.script_pubkey.clone()),
         records: z.records.as_ref().map(|d| sip7::RecordSet::new(d.clone())),
@@ -584,7 +590,7 @@ impl Veritas {
         self.inner.sovereignty_for(commitment_height).to_string()
     }
 
-    /// Verify a message with default options (expand_names: true, dev_mode: false).
+    /// Verify a message with default options.
     pub fn verify(
         &self,
         ctx: &QueryContext,
@@ -603,20 +609,19 @@ impl Veritas {
         Ok(Arc::new(VerifiedMessage { inner }))
     }
 
-    /// Verify a message with explicit options.
+    /// Verify a message with option flags (combine with bitwise OR).
     pub fn verify_with_options(
         &self,
         ctx: &QueryContext,
         msg: &Message,
-        expand_names: bool,
-        dev_mode: bool,
+        options: u32,
     ) -> Result<Arc<VerifiedMessage>, VeritasError> {
         let ctx_guard = ctx.inner.read().unwrap();
         let msg_inner = msg.inner.read().unwrap();
 
         let inner = self
             .inner
-            .verify_with_options(&ctx_guard, msg_inner.clone(), expand_names, dev_mode)
+            .verify_with_options(&ctx_guard, msg_inner.clone(), options)
             .map_err(|e| VeritasError::VerificationFailed {
                 msg: e.to_string(),
             })?;
@@ -714,6 +719,15 @@ impl Lookup {
 }
 
 // -- Free functions --
+
+#[uniffi::export]
+pub fn verify_default() -> u32 { libveritas::VERIFY_DEFAULT }
+
+#[uniffi::export]
+pub fn verify_dev_mode() -> u32 { libveritas::VERIFY_DEV_MODE }
+
+#[uniffi::export]
+pub fn verify_enable_snark() -> u32 { libveritas::VERIFY_ENABLE_SNARK }
 
 /// Hash a message with the Spaces signed-message prefix (SHA256).
 /// Returns the 32-byte digest suitable for Schnorr signing/verification.

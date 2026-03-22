@@ -20,7 +20,7 @@ fn test_space_not_found_in_chain_proof() {
     );
     let veritas = state.veritas();
     let ctx = QueryContext::new();
-    assert!(veritas.verify_with_options(&ctx, msg, false, true).is_err());
+    assert!(veritas.verify_with_options(&ctx, msg, libveritas::VERIFY_DEV_MODE).is_err());
 }
 
 #[test]
@@ -37,7 +37,7 @@ fn test_no_delegate_info_provided() {
     );
     let veritas = state.veritas();
     let ctx = QueryContext::new();
-    let res = veritas.verify_with_options(&ctx, msg, false, true).expect("valid");
+    let res = veritas.verify_with_options(&ctx, msg, libveritas::VERIFY_DEV_MODE).expect("valid");
 
     assert_eq!(res.zones.len(), 1, "expected 1 zones");
     let zone = res.zones.first().unwrap();
@@ -50,7 +50,7 @@ fn test_no_delegate_info_provided() {
     let mut ctx = QueryContext::new();
     ctx.add_zone(zone.clone());
 
-    let res = veritas.verify_with_options(&ctx, msg, false, true).expect("valid");
+    let res = veritas.verify_with_options(&ctx, msg, libveritas::VERIFY_DEV_MODE).expect("valid");
     assert_eq!(res.zones.len(), 1, "expected 1 zones");
     let zone = res.zones.first().unwrap();
     assert!(matches!(zone.delegate, ProvableOption::Exists { .. }));
@@ -74,7 +74,7 @@ fn test_kitchen_sink() {
 
     let ctx = QueryContext::new();
     let veritas = state.veritas();
-    let res = veritas.verify_with_options(&ctx, msg, false, true).expect("valid");
+    let res = veritas.verify_with_options(&ctx, msg, libveritas::VERIFY_DEV_MODE).expect("valid");
 
     assert_eq!(
         states.staged.len(),

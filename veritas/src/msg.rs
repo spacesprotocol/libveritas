@@ -49,7 +49,7 @@ impl QueryContext {
 
     /// Add a zone to the context. Replaces if handle already exists.
     pub fn add_zone(&mut self, zone: Zone) {
-        if let Some(existing) = self.zones.iter_mut().find(|z| z.handle == zone.handle) {
+        if let Some(existing) = self.zones.iter_mut().find(|z| z.canonical == zone.canonical) {
             *existing = zone;
         } else {
             self.zones.push(zone);
@@ -61,9 +61,9 @@ impl QueryContext {
         self.requests.is_empty() || self.requests.iter().any(|h| h == handle)
     }
 
-    /// Get a zone by exact handle.
+    /// Get a zone by canonical handle.
     pub fn get_zone(&self, handle: &SName) -> Option<&Zone> {
-        self.zones.iter().find(|z| &z.handle == handle)
+        self.zones.iter().find(|z| &z.canonical == handle)
     }
 
     /// Get the parent (root) zone for a space.
@@ -72,7 +72,7 @@ impl QueryContext {
     pub fn get_parent_zone(&self, space: &SLabel) -> Option<&Zone> {
         self.zones
             .iter()
-            .find(|z| z.handle.is_single_label() && z.handle.space().as_ref() == Some(space))
+            .find(|z| z.canonical.is_single_label() && z.canonical.space().as_ref() == Some(space))
     }
 }
 

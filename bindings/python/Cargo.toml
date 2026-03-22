@@ -5,7 +5,7 @@ edition = "2024"
 
 [lib]
 crate-type = ["cdylib"]
-name = "libveritas_python"
+name = "libveritas"
 
 [dependencies]
 libveritas-uniffi = { path = "../uniffi" }

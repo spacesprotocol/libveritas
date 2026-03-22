@@ -26,12 +26,18 @@ jobs:
             target: x86_64-apple-darwin
             artifact: darwin-x86-64
             lib: liblibveritas_uniffi.dylib
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: win32-x86-64
+            lib: libveritas_uniffi.dll
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -77,10 +83,12 @@ jobs:
           mkdir -p kotlin-publish/src/main/resources/linux-x86-64
           mkdir -p kotlin-publish/src/main/resources/darwin-aarch64
           mkdir -p kotlin-publish/src/main/resources/darwin-x86-64
+          mkdir -p kotlin-publish/src/main/resources/win32-x86-64
 
           cp artifacts/linux-x86-64/liblibveritas_uniffi.so     kotlin-publish/src/main/resources/linux-x86-64/
           cp artifacts/darwin-aarch64/liblibveritas_uniffi.dylib kotlin-publish/src/main/resources/darwin-aarch64/
           cp artifacts/darwin-x86-64/liblibveritas_uniffi.dylib  kotlin-publish/src/main/resources/darwin-x86-64/
+          cp artifacts/win32-x86-64/libveritas_uniffi.dll        kotlin-publish/src/main/resources/win32-x86-64/
 
       - name: Set version
         run: |
@@ -113,6 +121,11 @@ jobs:
 
           kotlin {
               jvmToolchain(17)
+          }
+
+          java {
+              withSourcesJar()
+              withJavadocJar()
           }
 
           publishing {
@@ -212,16 +225,13 @@ jobs:
           AUTH=$(echo -n "${{ secrets.CENTRAL_PORTAL_USERNAME }}:${{ secrets.CENTRAL_PORTAL_PASSWORD }}" | base64)
           curl -f -X POST \
             -H "Authorization: Bearer $AUTH" \
-            "https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/org.spacesprotocol"
+            "https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/org.spacesprotocol?publishing_type=automatic"
 
       - name: Publish to libveritas-kotlin repo
         env:
           GH_TOKEN: ${{ secrets.KOTLIN_PUBLISH_TOKEN }}
         run: |
-          VERSION="${GITHUB_REF_NAME}"
-          if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
-            VERSION="v0.0.0-dev.$(date +%Y%m%d%H%M%S)"
-          fi
+          VERSION="v${VERSION}"
 
           cd kotlin-publish
 

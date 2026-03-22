@@ -434,10 +434,12 @@ impl TestHandleTree {
             keypair,
         };
 
+        let h = sname(&format!("{}{}", name, self.space));
         let zone = Zone {
             anchor: 0,
             sovereignty: SovereigntyState::Dependent,
-            handle: sname(&format!("{}{}", name, self.space)),
+            canonical: h.clone(),
+            handle: h,
             alias: None,
             script_pubkey: genesis_spk,
             fallback_records: None,
@@ -765,7 +767,7 @@ fn verify_root_finalized() {
     let veritas = f.veritas();
     let ctx = QueryContext::new();
 
-    let result = veritas.verify_with_options(&ctx,f.finalized_message(&[]), false, true).expect("verify");
+    let result = veritas.verify_with_options(&ctx,f.finalized_message(&[]), libveritas::VERIFY_DEV_MODE).expect("verify");
 
     assert_eq!(result.zones.len(), 1);
     let zone = &result.zones[0];
@@ -785,14 +787,14 @@ fn verify_leaf_finalized() {
     let veritas = f.veritas();
     let ctx = QueryContext::new();
 
-    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["alice"]), false, true).expect("verify");
+    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["alice"]), libveritas::VERIFY_DEV_MODE).expect("verify");
 
     // Should have root zone + alice zone
     assert_eq!(result.zones.len(), 2);
     let alice = result.zones.iter().find(|z| z.handle == sname("alice@bitcoin")).expect("alice");
     assert!(matches!(alice.sovereignty, SovereigntyState::Sovereign));
 
-    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["bob"]), false, true).expect("verify");
+    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["bob"]), libveritas::VERIFY_DEV_MODE).expect("verify");
     let bob = result.zones.iter().find(|z| z.handle == sname("bob@bitcoin")).expect("bob");
     assert!(matches!(bob.sovereignty, SovereigntyState::Sovereign));
 }
@@ -803,7 +805,7 @@ fn verify_root_pending() {
     let veritas = f.veritas();
     let ctx = QueryContext::new();
 
-    let result = veritas.verify_with_options(&ctx,f.pending_message(&[]), false, true).expect("verify");
+    let result = veritas.verify_with_options(&ctx,f.pending_message(&[]), libveritas::VERIFY_DEV_MODE).expect("verify");
 
     assert_eq!(result.zones.len(), 1);
     let zone = &result.zones[0];
@@ -821,7 +823,7 @@ fn verify_leaf_pending() {
     let veritas = f.veritas();
     let ctx = QueryContext::new();
 
-    let result = veritas.verify_with_options(&ctx,f.pending_message(&["charlie"]), false, true).expect("verify");
+    let result = veritas.verify_with_options(&ctx,f.pending_message(&["charlie"]), libveritas::VERIFY_DEV_MODE).expect("verify");
     let charlie = result.zones.iter().find(|z| z.handle == sname("charlie@bitcoin")).expect("charlie");
     assert!(matches!(charlie.sovereignty, SovereigntyState::Pending));
 }
@@ -833,7 +835,7 @@ fn verify_leaf_across_anchors() {
     let ctx = QueryContext::new();
 
     // alice was committed in commitment 0, verified against the latest anchor
-    let result = veritas.verify_with_options(&ctx,f.pending_message(&["alice"]), false, true).expect("verify");
+    let result = veritas.verify_with_options(&ctx,f.pending_message(&["alice"]), libveritas::VERIFY_DEV_MODE).expect("verify");
     let alice = result.zones.iter().find(|z| z.handle == sname("alice@bitcoin")).expect("alice");
     assert_eq!(alice.handle, sname("alice@bitcoin"));
 }
@@ -845,7 +847,7 @@ fn verify_leaf_temporary() {
     let ctx = QueryContext::new();
 
     // "staged" is in staged but not committed — uses delegate's signature
-    let result = veritas.verify_with_options(&ctx,f.temporary_message("staged"), false, true).expect("verify");
+    let result = veritas.verify_with_options(&ctx,f.temporary_message("staged"), libveritas::VERIFY_DEV_MODE).expect("verify");
     let staged = result.zones.iter().find(|z| z.handle == sname("staged@bitcoin")).expect("staged");
     assert_eq!(staged.handle, sname("staged@bitcoin"));
     assert!(matches!(staged.sovereignty, SovereigntyState::Dependent));
@@ -860,7 +862,7 @@ fn verify_with_request_filter() {
     let mut ctx = QueryContext::new();
     ctx.add_request(sname("alice@bitcoin"));
 
-    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["alice", "bob"]), false, true).expect("verify");
+    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["alice", "bob"]), libveritas::VERIFY_DEV_MODE).expect("verify");
 
     // Should only return alice (root not requested, bob not requested)
     assert_eq!(result.zones.len(), 1);
@@ -874,12 +876,12 @@ fn verify_with_cached_parent_zone() {
 
     // First verify to get parent zone
     let ctx = QueryContext::new();
-    let result = veritas.verify_with_options(&ctx,f.finalized_message(&[]), false, true).expect("verify");
+    let result = veritas.verify_with_options(&ctx,f.finalized_message(&[]), libveritas::VERIFY_DEV_MODE).expect("verify");
     let parent_zone = result.zones[0].clone();
 
     // Now verify with cached parent
     let ctx = QueryContext::from_zones(vec![parent_zone]);
-    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["alice"]), false, true).expect("verify");
+    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["alice"]), libveritas::VERIFY_DEV_MODE).expect("verify");
 
     // Should succeed and include alice
     let alice = result.zones.iter().find(|z| z.handle == sname("alice@bitcoin")).expect("alice");
@@ -895,6 +897,7 @@ fn verify_uses_better_cached_zone() {
     let cached_zone = Zone {
         anchor: 0, // Lower than actual anchor
         sovereignty: SovereigntyState::Dependent,
+        canonical: sname("alice@bitcoin"),
         handle: sname("alice@bitcoin"),
         alias: None,
         script_pubkey: ScriptBuf::new(),
@@ -905,7 +908,7 @@ fn verify_uses_better_cached_zone() {
     };
 
     let ctx = QueryContext::from_zones(vec![cached_zone.clone()]);
-    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["alice"]), false, true).expect("verify");
+    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["alice"]), libveritas::VERIFY_DEV_MODE).expect("verify");
 
     // Should return the newly verified zone (better anchor)
     let alice = result.zones.iter().find(|z| z.handle == sname("alice@bitcoin")).expect("alice");
@@ -920,7 +923,7 @@ fn certificate_iterator() {
     let ctx = QueryContext::new();
 
     // Verify root + two leaves
-    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["alice", "bob"]), false, true).expect("verify");
+    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["alice", "bob"]), libveritas::VERIFY_DEV_MODE).expect("verify");
 
     let certs: Vec<Certificate> = result.certificates().collect();
 
@@ -948,7 +951,7 @@ fn certificate_iterator_leaves_only() {
     let mut ctx = QueryContext::new();
     ctx.add_request(sname("alice@bitcoin"));
 
-    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["alice"]), false, true).expect("verify");
+    let result = veritas.verify_with_options(&ctx,f.finalized_message(&["alice"]), libveritas::VERIFY_DEV_MODE).expect("verify");
 
     let certs: Vec<Certificate> = result.certificates().collect();
 
