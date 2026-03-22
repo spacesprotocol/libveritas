@@ -720,6 +720,22 @@ impl Lookup {
 
 // -- Free functions --
 
+/// Create a .spacecert file from a subject name and certificate bytes.
+#[uniffi::export]
+pub fn create_certificate_chain(subject: String, cert_bytes_list: Vec<Vec<u8>>) -> Result<Vec<u8>, VeritasError> {
+    let sname = SName::from_str(&subject).map_err(|e| VeritasError::InvalidInput {
+        msg: format!("invalid subject: {e}"),
+    })?;
+    let certs: Vec<libveritas::cert::Certificate> = cert_bytes_list.iter()
+        .map(|b| libveritas::cert::Certificate::from_slice(b)
+            .map_err(|e| VeritasError::InvalidInput {
+                msg: format!("invalid cert: {e}"),
+            }))
+        .collect::<Result<_, _>>()?;
+    let chain = libveritas::cert::CertificateChain::new(sname, certs);
+    Ok(chain.to_bytes())
+}
+
 #[uniffi::export]
 pub fn verify_default() -> u32 { libveritas::VERIFY_DEFAULT }
 

@@ -438,6 +438,21 @@ impl Lookup {
     }
 }
 
+/// Create a .spacecert file from a subject name and certificate bytes.
+///
+/// Collects certificates from multiple verified messages into a single chain.
+#[wasm_bindgen(js_name = "createCertificateChain")]
+pub fn create_certificate_chain(subject: &str, cert_bytes_list: Vec<js_sys::Uint8Array>) -> Result<Vec<u8>, JsError> {
+    let sname = SName::from_str(subject)
+        .map_err(|e| JsError::new(&format!("invalid subject: {e}")))?;
+    let certs: Vec<libveritas::cert::Certificate> = cert_bytes_list.iter()
+        .map(|b| libveritas::cert::Certificate::from_slice(&b.to_vec())
+            .map_err(|e| JsError::new(&format!("invalid cert: {e}"))))
+        .collect::<Result<_, _>>()?;
+    let chain = libveritas::cert::CertificateChain::new(sname, certs);
+    Ok(chain.to_bytes())
+}
+
 // ── Record / RecordSet ────────────────────────────────────────────
 
 fn parse_js_record(obj: &JsValue) -> Result<sip7::Record, JsError> {
