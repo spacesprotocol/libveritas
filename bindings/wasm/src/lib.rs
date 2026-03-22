@@ -360,21 +360,14 @@ impl VerifiedMessage {
         Ok(array.into())
     }
 
-    /// Get certificate for a specific handle (e.g. "alice@bitcoin").
-    /// Returns null if the handle was not verified.
-    pub fn certificate(&self, handle: &str) -> Result<JsValue, JsError> {
-        let sname = SName::from_str(handle)
-            .map_err(|e| JsError::new(&format!("invalid handle: {e}")))?;
-        match self.inner.certificate(&sname) {
-            Some(cert) => to_js(&cert),
-            None => Ok(JsValue::NULL),
-        }
-    }
-
-    /// All certificates as a JS array.
-    pub fn certificates(&self) -> Result<JsValue, JsError> {
-        let certs: Vec<_> = self.inner.certificates().collect();
-        to_js(&certs)
+    /// All certificates as serialized byte arrays.
+    pub fn certificates(&self) -> Vec<js_sys::Uint8Array> {
+        self.inner.certificates().map(|c| {
+            let bytes = c.to_bytes();
+            let arr = js_sys::Uint8Array::new_with_length(bytes.len() as u32);
+            arr.copy_from(&bytes);
+            arr
+        }).collect()
     }
 
     /// Get the verified message for rebroadcasting or updating.

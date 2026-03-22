@@ -44,13 +44,6 @@ pub enum CommitmentState {
 
 // -- Records --
 
-#[derive(uniffi::Record)]
-pub struct Certificate {
-    pub subject: String,
-    pub cert_type: String,
-    pub bytes: Vec<u8>,
-}
-
 /// Data update entry for Message.update() — no cert field.
 #[derive(uniffi::Record)]
 pub struct DataUpdateEntry {
@@ -60,21 +53,6 @@ pub struct DataUpdateEntry {
 }
 
 // -- Conversions --
-
-fn cert_to_record(c: &libveritas::cert::Certificate) -> Certificate {
-    let cert_type = if c.is_temporary() {
-        "temporary"
-    } else if c.is_leaf() {
-        "final"
-    } else {
-        "root"
-    };
-    Certificate {
-        subject: c.subject.to_string(),
-        cert_type: cert_type.to_string(),
-        bytes: c.to_bytes(),
-    }
-}
 
 fn parse_data_update(entry: &DataUpdateEntry) -> Result<builder::DataUpdateRequest, VeritasError> {
     let handle = SName::from_str(&entry.name)
@@ -645,20 +623,10 @@ impl VerifiedMessage {
             .collect()
     }
 
-    pub fn certificate(
-        &self,
-        handle: String,
-    ) -> Result<Option<Certificate>, VeritasError> {
-        let sname = SName::from_str(&handle).map_err(|e| VeritasError::InvalidInput {
-            msg: format!("invalid handle: {e}"),
-        })?;
-        Ok(self.inner.certificate(&sname).map(|c| cert_to_record(&c)))
-    }
-
-    pub fn certificates(&self) -> Vec<Certificate> {
+    pub fn certificates(&self) -> Vec<Vec<u8>> {
         self.inner
             .certificates()
-            .map(|c| cert_to_record(&c))
+            .map(|c| c.to_bytes())
             .collect()
     }
 

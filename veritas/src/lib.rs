@@ -1,5 +1,5 @@
 use crate::cert::{Certificate, Witness, Signature};
-use crate::sname::{NameLike, SName};
+use crate::sname::{SName};
 use borsh::{BorshDeserialize, BorshSerialize};
 use libveritas_zk::guest::CommitmentKind;
 use risc0_zkvm::{Receipt, VerifierContext};
@@ -41,48 +41,6 @@ pub struct VerifiedMessage {
 }
 
 impl VerifiedMessage {
-    /// Create a certificate for a verified handle.
-    ///
-    /// Returns `None` if the handle was not verified in this message.
-    pub fn certificate(&self, handle: &SName) -> Option<Certificate> {
-        if !self.zones.iter().any(|z| &z.canonical == handle || &z.handle == handle) {
-            return None;
-        }
-
-        // Use canonical form for bundle lookup
-        let canonical = self.zones.iter()
-            .find(|z| &z.canonical == handle || &z.handle == handle)
-            .map(|z| &z.canonical)?;
-        let space = canonical.space()?;
-        let bundle = self.message.spaces.iter().find(|b| b.subject == space)?;
-
-        if canonical.is_single_label() {
-            return Some(Certificate::new(
-                canonical.clone(),
-                Witness::Root {
-                    receipt: bundle.receipt.clone(),
-                },
-            ));
-        }
-
-        let label = canonical.subspace()?;
-
-        for epoch in &bundle.epochs {
-            let Some(h) = epoch.handles.iter().find(|h| h.name == label) else {
-                continue;
-            };
-            return Some(Certificate::new(
-                canonical.clone(),
-                Witness::Leaf {
-                    genesis_spk: h.genesis_spk.clone(),
-                    handles: epoch.tree.clone(),
-                    signature: h.signature,
-                },
-            ));
-        }
-        None
-    }
-
     /// Iterate over all certificates from this verified message.
     pub fn certificates(&self) -> CertificateIter<'_> {
         CertificateIter {
