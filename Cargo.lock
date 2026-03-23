@@ -493,7 +493,7 @@ dependencies = [
 [[package]]
 name = "borsh_utils"
 version = "0.1.0"
-source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#1e76faf6173693ce8be8f11703d3ed62cb0b64c7"
+source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#253667d6b2839fecfedfd3ac99a2246c13dd974c"
 dependencies = [
  "bitcoin",
  "borsh",
@@ -1732,7 +1732,7 @@ version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e67ba7e9b2b56446f1d419b1d807906278ffa1a658a8a5d8a39dcb1f5a78614f"
 dependencies = [
- "toml_edit 0.25.5+spec-1.1.0",
+ "toml_edit 0.25.8+spec-1.1.0",
 ]
 
 [[package]]
@@ -2382,7 +2382,7 @@ dependencies = [
 [[package]]
 name = "sip7"
 version = "0.1.0"
-source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#1e76faf6173693ce8be8f11703d3ed62cb0b64c7"
+source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#253667d6b2839fecfedfd3ac99a2246c13dd974c"
 dependencies = [
  "base64 0.22.1",
  "serde",
@@ -2424,7 +2424,7 @@ dependencies = [
 [[package]]
 name = "spaces_nums"
 version = "0.1.0"
-source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#1e76faf6173693ce8be8f11703d3ed62cb0b64c7"
+source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#253667d6b2839fecfedfd3ac99a2246c13dd974c"
 dependencies = [
  "bech32",
  "bitcoin",
@@ -2439,7 +2439,7 @@ dependencies = [
 [[package]]
 name = "spaces_protocol"
 version = "0.0.7"
-source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#1e76faf6173693ce8be8f11703d3ed62cb0b64c7"
+source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#253667d6b2839fecfedfd3ac99a2246c13dd974c"
 dependencies = [
  "bitcoin",
  "borsh",
@@ -2639,9 +2639,9 @@ dependencies = [
 
 [[package]]
 name = "toml_datetime"
-version = "1.0.1+spec-1.1.0"
+version = "1.1.0+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b320e741db58cac564e26c607d3cc1fdc4a88fd36c879568c07856ed83ff3e9"
+checksum = "97251a7c317e03ad83774a8752a7e81fb6067740609f75ea2b585b569a59198f"
 dependencies = [
  "serde_core",
 ]
@@ -2662,21 +2662,21 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.25.5+spec-1.1.0"
+version = "0.25.8+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ca1a40644a28bce036923f6a431df0b34236949d111cc07cb6dca830c9ef2e1"
+checksum = "16bff38f1d86c47f9ff0647e6838d7bb362522bdf44006c7068c2b1e606f1f3c"
 dependencies = [
  "indexmap 2.13.0",
- "toml_datetime 1.0.1+spec-1.1.0",
+ "toml_datetime 1.1.0+spec-1.1.0",
  "toml_parser",
  "winnow 1.0.0",
 ]
 
 [[package]]
 name = "toml_parser"
-version = "1.0.10+spec-1.1.0"
+version = "1.1.0+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7df25b4befd31c4816df190124375d5a20c6b6921e2cad937316de3fccd63420"
+checksum = "2334f11ee363607eb04df9b8fc8a13ca1715a72ba8662a26ac285c98aabb4011"
 dependencies = [
  "winnow 1.0.0",
 ]

@@ -107,6 +107,21 @@ fn zone_to_js(z: &libveritas::Zone) -> Result<JsValue, JsError> {
     to_js(z)
 }
 
+fn trust_set_to_js(ts: &libveritas::TrustSet) -> Result<JsValue, JsError> {
+    let obj = js_sys::Object::new();
+    let id = js_sys::Uint8Array::new_with_length(32);
+    id.copy_from(&ts.id);
+    js_sys::Reflect::set(&obj, &"id".into(), &id).map_err(|_| JsError::new("failed to set id"))?;
+    let roots = js_sys::Array::new();
+    for r in &ts.roots {
+        let arr = js_sys::Uint8Array::new_with_length(32);
+        arr.copy_from(r);
+        roots.push(&arr);
+    }
+    js_sys::Reflect::set(&obj, &"roots".into(), &roots).map_err(|_| JsError::new("failed to set roots"))?;
+    Ok(obj.into())
+}
+
 fn zone_from_js(val: &JsValue) -> Result<libveritas::Zone, JsError> {
     let json = js_sys::JSON::stringify(val)
         .map_err(|_| JsError::new("failed to stringify zone"))?;
@@ -272,9 +287,10 @@ impl Anchors {
         Ok(Anchors { inner })
     }
 
-    #[wasm_bindgen(js_name = "computeAnchorSetHash")]
-    pub fn compute_anchor_set_hash(&self) -> Vec<u8> {
-        libveritas::compute_anchor_set_hash(&self.inner).to_vec()
+    #[wasm_bindgen(js_name = "computeTrustSet")]
+    pub fn compute_trust_set(&self) -> Result<JsValue, JsError> {
+        let ts = libveritas::compute_trust_set(&self.inner);
+        trust_set_to_js(&ts)
     }
 }
 
@@ -301,9 +317,10 @@ impl Veritas {
         self.inner.newest_anchor()
     }
 
-    #[wasm_bindgen(js_name = "computeAnchorSetHash")]
-    pub fn compute_anchor_set_hash(&self) -> Vec<u8> {
-        self.inner.compute_anchor_set_hash().to_vec()
+    #[wasm_bindgen(js_name = "computeTrustSet")]
+    pub fn compute_trust_set(&self) -> Result<JsValue, JsError> {
+        let ts = self.inner.compute_trust_set();
+        trust_set_to_js(&ts)
     }
 
     pub fn is_finalized(&self, commitment_height: u32) -> bool {
@@ -351,6 +368,12 @@ pub struct VerifiedMessage {
 
 #[wasm_bindgen]
 impl VerifiedMessage {
+    /// The root id this message was verified against.
+    #[wasm_bindgen(js_name = "rootId")]
+    pub fn root_id(&self) -> Vec<u8> {
+        self.inner.root_id.to_vec()
+    }
+
     /// All verified zones as plain JS objects.
     pub fn zones(&self) -> Result<JsValue, JsError> {
         let array = js_sys::Array::new();

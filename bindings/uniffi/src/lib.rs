@@ -44,6 +44,12 @@ pub enum CommitmentState {
 
 // -- Records --
 
+#[derive(uniffi::Record)]
+pub struct TrustSet {
+    pub id: Vec<u8>,
+    pub roots: Vec<Vec<u8>>,
+}
+
 /// Data update entry for Message.update() — no cert field.
 #[derive(uniffi::Record)]
 pub struct DataUpdateEntry {
@@ -53,6 +59,13 @@ pub struct DataUpdateEntry {
 }
 
 // -- Conversions --
+
+fn trust_set_from_inner(ts: &libveritas::TrustSet) -> TrustSet {
+    TrustSet {
+        id: ts.id.to_vec(),
+        roots: ts.roots.iter().map(|r| r.to_vec()).collect(),
+    }
+}
 
 fn parse_data_update(entry: &DataUpdateEntry) -> Result<builder::DataUpdateRequest, VeritasError> {
     let handle = SName::from_str(&entry.name)
@@ -432,8 +445,8 @@ impl Anchors {
         Ok(Anchors { inner })
     }
 
-    pub fn compute_anchor_set_hash(&self) -> Vec<u8> {
-        libveritas::compute_anchor_set_hash(&self.inner).to_vec()
+    pub fn compute_trust_set(&self) -> TrustSet {
+        trust_set_from_inner(&libveritas::compute_trust_set(&self.inner))
     }
 }
 
@@ -556,8 +569,8 @@ impl Veritas {
         self.inner.newest_anchor()
     }
 
-    pub fn compute_anchor_set_hash(&self) -> Vec<u8> {
-        self.inner.compute_anchor_set_hash().to_vec()
+    pub fn compute_trust_set(&self) -> TrustSet {
+        trust_set_from_inner(&self.inner.compute_trust_set())
     }
 
     pub fn is_finalized(&self, commitment_height: u32) -> bool {
@@ -615,6 +628,10 @@ pub struct VerifiedMessage {
 
 #[uniffi::export]
 impl VerifiedMessage {
+    pub fn root_id(&self) -> Vec<u8> {
+        self.inner.root_id.to_vec()
+    }
+
     pub fn zones(&self) -> Vec<Zone> {
         self.inner
             .zones

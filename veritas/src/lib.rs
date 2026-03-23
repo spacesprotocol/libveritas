@@ -36,6 +36,7 @@ pub const VERIFY_ENABLE_SNARK: u32 = 1 << 1;
 /// Contains the verified zones and the original message data.
 /// The message can be used to construct certificates for storage.
 pub struct VerifiedMessage {
+    pub root_id: [u8; 32],
     pub zones: Vec<Zone>,
     pub message: msg::Message,
 }
@@ -365,18 +366,34 @@ impl BorshDeserialize for Zone {
     }
 }
 
-/// Compute a deterministic hash over an anchor set.
-///
-/// Useful for comparing whether two clients share the same anchor state.
-pub fn compute_anchor_set_hash(anchors: &[RootAnchor]) -> [u8; 32] {
+/// Compute a deterministic id for a single root anchor.
+pub fn compute_root_id(root: &RootAnchor) -> [u8; 32] {
     let mut engine = sha256::Hash::engine();
-    for root in anchors {
-        engine.input(&root.block.hash[..]);
-        engine.input(&root.block.height.to_le_bytes());
-        engine.input(&root.spaces_root);
-        engine.input(&root.nums_root.unwrap_or([0u8; 32]));
-    }
+    engine.input(&root.block.hash[..]);
+    engine.input(&root.block.height.to_le_bytes());
+    engine.input(&root.spaces_root);
+    engine.input(&root.nums_root.unwrap_or([0u8; 32]));
     sha256::Hash::from_engine(engine).to_byte_array()
+}
+
+/// A compact representation of a set of trusted anchors.
+#[derive(Clone)]
+pub struct TrustSet {
+    pub id: [u8; 32],
+    pub roots: Vec<[u8; 32]>,
+}
+
+/// Compute a trust set from anchors.
+pub fn compute_trust_set(anchors: &[RootAnchor]) -> TrustSet {
+    let roots: Vec<[u8; 32]> = anchors.iter().map(compute_root_id).collect();
+    let mut engine = sha256::Hash::engine();
+    for r in &roots {
+        engine.input(r);
+    }
+    TrustSet {
+        id: sha256::Hash::from_engine(engine).to_byte_array(),
+        roots,
+    }
 }
 
 pub fn hash_signable_message(msg: &[u8]) -> secp256k1::Message {
@@ -696,8 +713,8 @@ impl Veritas {
         self.newest_anchor
     }
 
-    pub fn compute_anchor_set_hash(&self) -> [u8; 32] {
-        compute_anchor_set_hash(&self.anchors)
+    pub fn compute_trust_set(&self) -> TrustSet {
+        compute_trust_set(&self.anchors)
     }
 
     pub fn is_finalized(&self, commitment_height: u32) -> bool {
@@ -751,6 +768,7 @@ impl Veritas {
         resolver.expand_zones(&mut zones);
 
         Ok(VerifiedMessage {
+            root_id: compute_root_id(&anchor),
             zones,
             message: msg::Message {
                 chain: msg.chain,
