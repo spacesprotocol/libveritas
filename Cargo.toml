@@ -7,7 +7,7 @@ spaces_protocol = { git = "https://github.com/spacesprotocol/spaces.git", branch
 spaces_nums = { git = "https://github.com/spacesprotocol/spaces.git", branch = "subspaces",  features = ["std"] }
 sip7 = { git = "https://github.com/spacesprotocol/spaces.git", branch = "subspaces",  features = ["serde"] }
 borsh_utils = { git = "https://github.com/spacesprotocol/spaces.git", branch = "subspaces" }
-spacedb = { git = "https://github.com/spacesprotocol/spacedb.git", version = "0.0.12", default-features = false, features = ["extras"] }
+spacedb = { git = "https://github.com/spacesprotocol/spacedb.git",  default-features = false, features = ["extras"] }
 
 # Always optimize; building and running the guest takes much longer without optimization.
 [profile.dev]
