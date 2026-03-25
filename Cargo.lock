@@ -493,7 +493,7 @@ dependencies = [
 [[package]]
 name = "borsh_utils"
 version = "0.1.0"
-source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#8815767a9fd877207b6d13a68a5c0a3da7bec2b7"
+source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#4c8d2223d1e20e8de694e8262c37f16416858840"
 dependencies = [
  "bitcoin",
  "borsh",
@@ -2382,7 +2382,7 @@ dependencies = [
 [[package]]
 name = "sip7"
 version = "0.1.0"
-source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#8815767a9fd877207b6d13a68a5c0a3da7bec2b7"
+source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#4c8d2223d1e20e8de694e8262c37f16416858840"
 dependencies = [
  "base64 0.22.1",
  "serde",
@@ -2424,7 +2424,7 @@ dependencies = [
 [[package]]
 name = "spaces_nums"
 version = "0.1.0"
-source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#8815767a9fd877207b6d13a68a5c0a3da7bec2b7"
+source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#4c8d2223d1e20e8de694e8262c37f16416858840"
 dependencies = [
  "bech32",
  "bitcoin",
@@ -2439,7 +2439,7 @@ dependencies = [
 [[package]]
 name = "spaces_protocol"
 version = "0.0.7"
-source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#8815767a9fd877207b6d13a68a5c0a3da7bec2b7"
+source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#4c8d2223d1e20e8de694e8262c37f16416858840"
 dependencies = [
  "bitcoin",
  "borsh",
