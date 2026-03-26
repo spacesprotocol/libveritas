@@ -482,7 +482,6 @@ impl TestHandleTree {
 
         let receipt = if onchain_commitment.prev_root.is_some() {
             let commitment = libveritas_zk::guest::Commitment {
-                subject: KeyHash::hash(self.space.as_ref()),
                 policy_step: libveritas::constants::STEP_ID,
                 policy_fold: libveritas::constants::FOLD_ID,
                 initial_root,
