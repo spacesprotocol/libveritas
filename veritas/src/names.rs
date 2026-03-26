@@ -155,22 +155,26 @@ struct LookupEntry {
 impl LookupEntry {
     fn new(name: &SName) -> Option<Self> {
         let count = name.label_count();
-        if count < 2 {
+        if count == 0 {
             return None;
         }
         let labels: Vec<String> = name.iter()
             .map(|l| std::str::from_utf8(l).unwrap_or("").to_string())
             .collect();
         let space = name.space()?;
+        let done = count <= 1;
         Some(Self {
             labels,
-            cursor: count - 2,
+            cursor: count.saturating_sub(2),
             space,
-            done: false,
+            done,
         })
     }
 
     fn current_handle(&self) -> Option<SName> {
+        if self.labels.len() == 1 {
+            return Some(SName::from(&self.space));
+        }
         build_2label(self.labels[self.cursor].as_bytes(), &self.space)
     }
 
@@ -514,6 +518,17 @@ mod tests {
         let zones2 = vec![make_zone("nested1#800-12-12", None)];
         let done = lookup.advance(&zones2);
         assert!(done.is_empty());
+    }
+
+    #[test]
+    fn lookup_single_label() {
+        let lookup = Lookup::new(vec![
+            SName::from_str("@bitcoin").unwrap(),
+        ]);
+
+        let names = lookup.start();
+        assert_eq!(names[0], SName::from_str("@bitcoin").unwrap());
+        assert!(lookup.advance(&[]).is_empty());
     }
 
     #[test]
