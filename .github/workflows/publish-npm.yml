@@ -31,9 +31,26 @@ jobs:
       - name: Build WASM package
         run: |
           wasm-pack build bindings/wasm/ \
-            --target nodejs \
+            --target web \
             --out-dir ../../pkg \
             --out-name libveritas
+
+      - name: Add Node.js wrapper
+        run: |
+          cat > pkg/node.js << 'WRAPPER'
+          import { readFileSync } from 'node:fs';
+          import { fileURLToPath } from 'node:url';
+          import { dirname, join } from 'node:path';
+          import init, * as wasm from './libveritas.js';
+
+          const __filename = fileURLToPath(import.meta.url);
+          const __dirname = dirname(__filename);
+          const bytes = readFileSync(join(__dirname, 'libveritas_bg.wasm'));
+          await init(bytes);
+
+          export * from './libveritas.js';
+          export default wasm;
+          WRAPPER
 
       - name: Set package version from tag
         run: |
@@ -42,9 +59,14 @@ jobs:
             VERSION="0.0.0-dev.$(date +%Y%m%d%H%M%S)"
           fi
           cd pkg
-          # wasm-pack generates package.json; patch the name and version
+          # wasm-pack generates package.json; patch the name, version, and exports
           jq --arg v "$VERSION" --arg n "@spacesprotocol/libveritas" \
-            '.name = $n | .version = $v' package.json > package.json.tmp
+            '.name = $n | .version = $v | .exports = {
+              ".": {
+                "node": "./node.js",
+                "default": "./libveritas.js"
+              }
+            }' package.json > package.json.tmp
           mv package.json.tmp package.json
 
       - name: Setup Node.js
