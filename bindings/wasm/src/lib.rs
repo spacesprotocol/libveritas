@@ -486,10 +486,20 @@ fn parse_js_record(obj: &JsValue) -> Result<sip7::Record, JsError> {
             let key = js_sys::Reflect::get(obj, &"key".into())
                 .ok().and_then(|v| v.as_string())
                 .ok_or_else(|| JsError::new("txt record: 'key' must be a string"))?;
-            let value = js_sys::Reflect::get(obj, &"value".into())
-                .ok().and_then(|v| v.as_string())
-                .ok_or_else(|| JsError::new("txt record: 'value' must be a string"))?;
-            Ok(sip7::Record::txt(&key, &value))
+            let raw = js_sys::Reflect::get(obj, &"value".into())
+                .map_err(|_| JsError::new("txt record: 'value' is required"))?;
+            let values = if raw.is_string() {
+                vec![raw.as_string().unwrap()]
+            } else if js_sys::Array::is_array(&raw) {
+                let arr = js_sys::Array::from(&raw);
+                (0..arr.length())
+                    .map(|i| arr.get(i).as_string()
+                        .ok_or_else(|| JsError::new("txt record: array values must be strings")))
+                    .collect::<Result<Vec<_>, _>>()?
+            } else {
+                return Err(JsError::new("txt record: 'value' must be a string or array of strings"));
+            };
+            Ok(sip7::Record::txts(&key, values))
         }
         "blob" => {
             let key = js_sys::Reflect::get(obj, &"key".into())
@@ -513,10 +523,18 @@ fn parse_js_record(obj: &JsValue) -> Result<sip7::Record, JsError> {
     }
 }
 
+fn txt_to_js(key: &str, value: &[String]) -> JsValue {
+    let arr = js_sys::Array::new();
+    for v in value {
+        arr.push(&v.into());
+    }
+    Record::txts(key, arr.into())
+}
+
 fn sip7_record_to_js(record: &sip7::Record) -> JsValue {
     match record {
         sip7::Record::Seq(version) => Record::seq(*version),
-        sip7::Record::Txt { key, value } => Record::txt(key, value),
+        sip7::Record::Txt { key, value } => txt_to_js(key, value),
         sip7::Record::Blob { key, value } => Record::blob(key, value),
         sip7::Record::Unknown { rtype, rdata } => Record::unknown(*rtype, rdata),
     }
@@ -526,7 +544,7 @@ fn sip7_record_to_js(record: &sip7::Record) -> JsValue {
 ///
 /// ```js
 /// const rs = RecordSet.pack([
-///     Record.txt("btc", "bc1qtest"),
+///     Record.txt("btc", ["bc1qtest"]),
 ///     Record.blob("avatar", pngBytes),
 ///     Record.unknown(0x10, raw),
 /// ]);
@@ -544,10 +562,15 @@ impl Record {
     }
 
     pub fn txt(key: &str, value: &str) -> JsValue {
+        let arr = js_sys::Array::of1(&value.into());
+        Record::txts(key, arr.into())
+    }
+
+    pub fn txts(key: &str, value: JsValue) -> JsValue {
         let obj = js_sys::Object::new();
         js_sys::Reflect::set(&obj, &"type".into(), &"txt".into()).unwrap();
         js_sys::Reflect::set(&obj, &"key".into(), &key.into()).unwrap();
-        js_sys::Reflect::set(&obj, &"value".into(), &value.into()).unwrap();
+        js_sys::Reflect::set(&obj, &"value".into(), &value).unwrap();
         obj.into()
     }
 

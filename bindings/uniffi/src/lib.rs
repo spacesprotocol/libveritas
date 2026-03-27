@@ -457,6 +457,7 @@ impl Anchors {
 pub enum Record {
     Seq { version: u64 },
     Txt { key: String, value: String },
+    Txts { key: String, value: Vec<String> },
     Blob { key: String, value: Vec<u8> },
     Unknown { rtype: u8, rdata: Vec<u8> },
 }
@@ -465,7 +466,7 @@ impl From<sip7::Record> for Record {
     fn from(r: sip7::Record) -> Self {
         match r {
             sip7::Record::Seq(version) => Record::Seq { version },
-            sip7::Record::Txt { key, value } => Record::Txt { key, value },
+            sip7::Record::Txt { key, value } => Record::Txts { key, value },
             sip7::Record::Blob { key, value } => Record::Blob { key, value },
             sip7::Record::Unknown { rtype, rdata } => Record::Unknown { rtype, rdata },
         }
@@ -477,6 +478,7 @@ impl From<Record> for sip7::Record {
         match r {
             Record::Seq { version } => sip7::Record::seq(version),
             Record::Txt { key, value } => sip7::Record::txt(&key, &value),
+            Record::Txts { key, value } => sip7::Record::txts(&key, value),
             Record::Blob { key, value } => sip7::Record::blob(&key, value),
             Record::Unknown { rtype, rdata } => sip7::Record::unknown(rtype, rdata),
         }

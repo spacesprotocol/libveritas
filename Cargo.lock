@@ -493,7 +493,7 @@ dependencies = [
 [[package]]
 name = "borsh_utils"
 version = "0.1.0"
-source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#fcdcd3641238045358c32a42a709d67d7b0944a9"
+source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#a9feca2fc0aab8d1f57bfd78f8686701351d8f86"
 dependencies = [
  "bitcoin",
  "borsh",
@@ -577,9 +577,9 @@ checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "cc"
-version = "1.2.57"
+version = "1.2.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a0dd1ca384932ff3641c8718a02769f1698e7563dc6974ffd03346116310423"
+checksum = "e1e928d4b69e3077709075a938a05ffbedfa53a84c8f766efbf8220bb1ff60e1"
 dependencies = [
  "find-msvc-tools",
  "shlex",
@@ -2382,7 +2382,7 @@ dependencies = [
 [[package]]
 name = "sip7"
 version = "0.1.0"
-source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#fcdcd3641238045358c32a42a709d67d7b0944a9"
+source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#a9feca2fc0aab8d1f57bfd78f8686701351d8f86"
 dependencies = [
  "base64 0.22.1",
  "serde",
@@ -2424,7 +2424,7 @@ dependencies = [
 [[package]]
 name = "spaces_nums"
 version = "0.1.0"
-source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#fcdcd3641238045358c32a42a709d67d7b0944a9"
+source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#a9feca2fc0aab8d1f57bfd78f8686701351d8f86"
 dependencies = [
  "bech32",
  "bitcoin",
@@ -2439,7 +2439,7 @@ dependencies = [
 [[package]]
 name = "spaces_protocol"
 version = "0.0.7"
-source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#fcdcd3641238045358c32a42a709d67d7b0944a9"
+source = "git+https://github.com/spacesprotocol/spaces.git?branch=subspaces#a9feca2fc0aab8d1f57bfd78f8686701351d8f86"
 dependencies = [
  "bitcoin",
  "borsh",
