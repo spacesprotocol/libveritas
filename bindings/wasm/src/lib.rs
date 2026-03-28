@@ -85,6 +85,7 @@ impl QueryContext {
 
     /// Add a handle to verify (e.g. "alice@bitcoin").
     /// If no requests are added, all handles in the message are verified.
+    #[wasm_bindgen(js_name = "addRequest")]
     pub fn add_request(&mut self, handle: &str) -> Result<(), JsError> {
         let sname = SName::from_str(handle)
             .map_err(|e| JsError::new(&format!("invalid handle: {e}")))?;
@@ -93,6 +94,7 @@ impl QueryContext {
     }
 
     /// Add a known zone from stored bytes (from a previous verification).
+    #[wasm_bindgen(js_name = "addZone")]
     pub fn add_zone(&mut self, zone_bytes: &[u8]) -> Result<(), JsError> {
         let zone = libveritas::Zone::from_slice(zone_bytes)
             .map_err(|e| JsError::new(&format!("invalid zone: {e}")))?;
@@ -148,6 +150,7 @@ impl Message {
     }
 
     /// Serialize the message to borsh bytes.
+    #[wasm_bindgen(js_name = "toBytes")]
     pub fn to_bytes(&self) -> Vec<u8> {
         self.inner.to_bytes()
     }
@@ -248,6 +251,7 @@ impl MessageBuilder {
     /// Returns the chain proof request as a JS object.
     ///
     /// Send this to the provider/fabric to get the chain proofs needed for `build()`.
+    #[wasm_bindgen(js_name = "chainProofRequest")]
     pub fn chain_proof_request(&self) -> Result<JsValue, JsError> {
         let builder = self
             .inner
@@ -309,10 +313,12 @@ impl Veritas {
         Ok(Veritas { inner })
     }
 
+    #[wasm_bindgen(js_name = "oldestAnchor")]
     pub fn oldest_anchor(&self) -> u32 {
         self.inner.oldest_anchor()
     }
 
+    #[wasm_bindgen(js_name = "newestAnchor")]
     pub fn newest_anchor(&self) -> u32 {
         self.inner.newest_anchor()
     }
@@ -323,10 +329,12 @@ impl Veritas {
         trust_set_to_js(&ts)
     }
 
+    #[wasm_bindgen(js_name = "isFinalized")]
     pub fn is_finalized(&self, commitment_height: u32) -> bool {
         self.inner.is_finalized(commitment_height)
     }
 
+    #[wasm_bindgen(js_name = "sovereigntyFor")]
     pub fn sovereignty_for(&self, commitment_height: u32) -> String {
         self.inner.sovereignty_for(commitment_height).to_string()
     }
@@ -401,6 +409,7 @@ impl VerifiedMessage {
     }
 
     /// Get the verified message as borsh bytes.
+    #[wasm_bindgen(js_name = "messageBytes")]
     pub fn message_bytes(&self) -> Vec<u8> {
         self.inner.message.to_bytes()
     }
@@ -664,40 +673,34 @@ impl RecordSet {
     }
 }
 
-/// Helpers for constructing OffchainRecords (signed record sets).
+/// Create borsh-encoded OffchainRecords from a RecordSet and 64-byte Schnorr signature.
 ///
 /// ```js
 /// const rs = RecordSet.pack([Record.seq(0), Record.txt("btc", "bc1qtest")]);
 /// const sig = await wallet.signSchnorr(rs.signingId());
-/// const bytes = OffchainRecords.from(rs, sig);
+/// const bytes = createOffchainRecords(rs, sig);
 /// ```
-#[wasm_bindgen]
-pub struct OffchainRecords;
-
-#[wasm_bindgen]
-impl OffchainRecords {
-    /// Create borsh-encoded OffchainRecords from a RecordSet and 64-byte signature.
-    pub fn from(record_set: &RecordSet, signature: &[u8]) -> Result<Vec<u8>, JsError> {
-        let sig: [u8; 64] = signature.try_into()
-            .map_err(|_| JsError::new("signature must be 64 bytes"))?;
-        let offchain = msg::OffchainRecords::new(
-            record_set.inner.clone(),
-            libveritas::cert::Signature(sig),
-        );
-        Ok(offchain.to_bytes())
-    }
+#[wasm_bindgen(js_name = "createOffchainRecords")]
+pub fn create_offchain_records(record_set: &RecordSet, signature: &[u8]) -> Result<Vec<u8>, JsError> {
+    let sig: [u8; 64] = signature.try_into()
+        .map_err(|_| JsError::new("signature must be 64 bytes"))?;
+    let offchain = msg::OffchainRecords::new(
+        record_set.inner.clone(),
+        libveritas::cert::Signature(sig),
+    );
+    Ok(offchain.to_bytes())
 }
 
 /// Hash a message with the Spaces signed-message prefix (SHA256).
 /// Returns the 32-byte digest suitable for Schnorr signing/verification.
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = "hashSignableMessage")]
 pub fn hash_signable_message(msg: &[u8]) -> Vec<u8> {
     let secp_msg = libveritas::hash_signable_message(msg);
     secp_msg.as_ref().to_vec()
 }
 
 /// Verify a Schnorr signature over a message using the Spaces signed-message prefix.
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = "verifySpacesMessage")]
 pub fn verify_spaces_message(msg: &[u8], signature: &[u8], pubkey: &[u8]) -> Result<(), JsError> {
     let sig: [u8; 64] = signature.try_into()
         .map_err(|_| JsError::new("signature must be 64 bytes"))?;
@@ -708,7 +711,7 @@ pub fn verify_spaces_message(msg: &[u8], signature: &[u8], pubkey: &[u8]) -> Res
 }
 
 /// Verify a raw Schnorr signature (no prefix, caller provides the 32-byte message hash).
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = "verifySchnorr")]
 pub fn verify_schnorr(msg_hash: &[u8], signature: &[u8], pubkey: &[u8]) -> Result<(), JsError> {
     let hash: [u8; 32] = msg_hash.try_into()
         .map_err(|_| JsError::new("msg_hash must be 32 bytes"))?;
@@ -745,7 +748,7 @@ pub fn zone_is_better_than(a: JsValue, b: JsValue) -> Result<bool, JsError> {
 }
 
 /// Decode stored certificate bytes to a JS object.
-#[wasm_bindgen]
+#[wasm_bindgen(js_name = "decodeCertificate")]
 pub fn decode_certificate(bytes: &[u8]) -> Result<JsValue, JsError> {
     let cert = libveritas::cert::Certificate::from_slice(bytes)
         .map_err(|e| JsError::new(&format!("invalid certificate: {e}")))?;
