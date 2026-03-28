@@ -47,7 +47,7 @@ jobs:
           cd pkg
           # wasm-pack generates package.json; patch the name, version, and exports
           jq --arg v "$VERSION" --arg n "@spacesprotocol/libveritas" \
-            '.name = $n | .version = $v | .exports = {
+            '.name = $n | .version = $v | .files += ["node.js"] | .exports = {
               ".": {
                 "node": "./node.js",
                 "default": "./libveritas.js"
