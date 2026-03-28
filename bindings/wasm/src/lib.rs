@@ -477,9 +477,16 @@ fn parse_js_record(obj: &JsValue) -> Result<sip7::Record, JsError> {
         .ok_or_else(|| JsError::new("record must have a 'type' field"))?;
     match rtype.as_str() {
         "seq" => {
-            let version = js_sys::Reflect::get(obj, &"version".into())
-                .ok().and_then(|v| v.as_f64())
-                .ok_or_else(|| JsError::new("seq record: 'version' must be a number"))? as u64;
+            let raw = js_sys::Reflect::get(obj, &"version".into())
+                .map_err(|_| JsError::new("seq record: 'version' is required"))?;
+            let version = if let Some(n) = raw.as_f64() {
+                n as u64
+            } else if raw.is_bigint() {
+                u64::try_from(js_sys::BigInt::from(raw))
+                    .map_err(|_| JsError::new("seq record: 'version' out of u64 range"))?
+            } else {
+                return Err(JsError::new("seq record: 'version' must be a number or bigint"));
+            };
             Ok(sip7::Record::seq(version))
         }
         "txt" => {
