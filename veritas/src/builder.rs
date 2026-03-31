@@ -101,30 +101,38 @@ impl MessageBuilder {
             };
 
             if let Some(data) = update.records {
-                let with_sig = msg::pack_sig(&signer, &rev, &data)
-                    .map_err(|e| MessageError::RecordsInvalid {
-                        handle: update.handle.to_string(),
-                        reason: e.to_string(),
-                    })?;
-                unsigned.push(UnsignedRecord {
-                    handle: update.handle.clone(),
-                    signer: signer.clone(),
-                    signing_id: msg::signing_id_for(&with_sig),
-                });
-                msg.set_records(&signer, with_sig);
+                if msg::find_sig(&data).is_some() {
+                    msg.set_records(&signer, data);
+                } else {
+                    let with_sig = msg::pack_sig(&signer, &rev, &data)
+                        .map_err(|e| MessageError::RecordsInvalid {
+                            handle: update.handle.to_string(),
+                            reason: e.to_string(),
+                        })?;
+                    unsigned.push(UnsignedRecord {
+                        handle: update.handle.clone(),
+                        signer: signer.clone(),
+                        signing_id: msg::signing_id_for(&with_sig),
+                    });
+                    msg.set_records(&signer, with_sig);
+                }
             }
             if let Some(data) = update.delegate_records {
-                let with_sig = msg::pack_sig(&signer, &rev, &data)
-                    .map_err(|e| MessageError::RecordsInvalid {
-                        handle: update.handle.to_string(),
-                        reason: e.to_string(),
-                    })?;
-                unsigned.push(UnsignedRecord {
-                    handle: update.handle.clone(),
-                    signer: signer.clone(),
-                    signing_id: msg::signing_id_for(&with_sig),
-                });
-                msg.set_delegate_records(&signer, with_sig);
+                if msg::find_sig(&data).is_some() {
+                    msg.set_delegate_records(&signer, data);
+                } else {
+                    let with_sig = msg::pack_sig(&signer, &rev, &data)
+                        .map_err(|e| MessageError::RecordsInvalid {
+                            handle: update.handle.to_string(),
+                            reason: e.to_string(),
+                        })?;
+                    unsigned.push(UnsignedRecord {
+                        handle: update.handle.clone(),
+                        signer: signer.clone(),
+                        signing_id: msg::signing_id_for(&with_sig),
+                    });
+                    msg.set_delegate_records(&signer, with_sig);
+                }
             }
         }
 

@@ -344,14 +344,29 @@ pub fn verify_records(
         .map_err(|_| crate::SignatureError::VerificationFailed)
 }
 
+/// Extract the Sig record from a RecordSet, if present.
+///
+/// Returns `(signer, rev, sig_bytes)`.
+pub fn find_sig(records: &sip7::RecordSet) -> Option<(SName, SName, Vec<u8>)> {
+    let unpacked = records.unpack().ok()?;
+    unpacked.into_iter().find_map(|r| match r {
+        sip7::Record::Sig { signer, rev, sig } => Some((signer, rev, sig)),
+        _ => None,
+    })
+}
+
 /// Append a Sig record with empty signature to a RecordSet.
+///
+/// If a Sig record already exists, the RecordSet is returned unchanged.
 ///
 /// `signer` is the canonical/flattened name (e.g. `alice#800-12-12`).
 /// `rev` is the original human-readable name (e.g. `alice@bitcoin`).
 /// Returns a new RecordSet whose wire bytes are the signing payload.
 pub fn pack_sig(signer: &SName, rev: &SName, records: &sip7::RecordSet) -> Result<sip7::RecordSet, sip7::Error> {
+    if find_sig(records).is_some() {
+        return Ok(records.clone());
+    }
     let mut unpacked = records.unpack()?;
-    unpacked.retain(|r| !matches!(r, sip7::Record::Sig { .. }));
     unpacked.push(sip7::Record::sig(signer.clone(), rev.clone(), vec![]));
     sip7::RecordSet::pack(unpacked)
 }
