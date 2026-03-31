@@ -488,6 +488,7 @@ impl Anchors {
 pub enum Record {
     Seq { version: u64 },
     Txt { key: String, value: Vec<String> },
+    Addr { key: String, value: Vec<String> },
     Blob { key: String, value: Vec<u8> },
     Sig { signer: String, rev: String, sig: Vec<u8> },
     Unknown { rtype: u8, rdata: Vec<u8> },
@@ -498,6 +499,7 @@ impl From<sip7::Record> for Record {
         match r {
             sip7::Record::Seq(version) => Record::Seq { version },
             sip7::Record::Txt { key, value } => Record::Txt { key, value },
+            sip7::Record::Addr { key, value } => Record::Addr { key, value },
             sip7::Record::Blob { key, value } => Record::Blob { key, value },
             sip7::Record::Sig { signer, rev, sig } => Record::Sig {
                 signer: signer.to_string(),
@@ -516,6 +518,10 @@ impl From<Record> for sip7::Record {
             Record::Txt { key, value } => {
                 let refs: Vec<&str> = value.iter().map(|s| s.as_str()).collect();
                 sip7::Record::txt(&key, &refs)
+            }
+            Record::Addr { key, value } => {
+                let refs: Vec<&str> = value.iter().map(|s| s.as_str()).collect();
+                sip7::Record::addr(&key, &refs)
             }
             Record::Blob { key, value } => sip7::Record::blob(&key, value),
             Record::Sig { signer, rev, sig } => {

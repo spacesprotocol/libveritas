@@ -550,6 +550,26 @@ fn parse_js_record(obj: &JsValue) -> Result<sip7::Record, JsError> {
             let refs: Vec<&str> = values.iter().map(|s| s.as_str()).collect();
             Ok(sip7::Record::txt(&key, &refs))
         }
+        "addr" => {
+            let key = js_sys::Reflect::get(obj, &"key".into())
+                .ok().and_then(|v| v.as_string())
+                .ok_or_else(|| JsError::new("addr record: 'key' must be a string"))?;
+            let raw = js_sys::Reflect::get(obj, &"value".into())
+                .map_err(|_| JsError::new("addr record: 'value' is required"))?;
+            let values = if raw.is_string() {
+                vec![raw.as_string().unwrap()]
+            } else if js_sys::Array::is_array(&raw) {
+                let arr = js_sys::Array::from(&raw);
+                (0..arr.length())
+                    .map(|i| arr.get(i).as_string()
+                        .ok_or_else(|| JsError::new("addr record: array values must be strings")))
+                    .collect::<Result<Vec<_>, _>>()?
+            } else {
+                return Err(JsError::new("addr record: 'value' must be a string or array of strings"));
+            };
+            let refs: Vec<&str> = values.iter().map(|s| s.as_str()).collect();
+            Ok(sip7::Record::addr(&key, &refs))
+        }
         "blob" => {
             let key = js_sys::Reflect::get(obj, &"key".into())
                 .ok().and_then(|v| v.as_string())
@@ -600,10 +620,19 @@ fn txt_to_js(key: &str, value: &[String]) -> JsValue {
     Record::txt(key, arr.into())
 }
 
+fn addr_to_js(key: &str, value: &[String]) -> JsValue {
+    let arr = js_sys::Array::new();
+    for v in value {
+        arr.push(&v.into());
+    }
+    Record::addr(key, arr.into())
+}
+
 fn sip7_record_to_js(record: &sip7::Record) -> JsValue {
     match record {
         sip7::Record::Seq(version) => Record::seq(*version),
         sip7::Record::Txt { key, value } => txt_to_js(key, value),
+        sip7::Record::Addr { key, value } => addr_to_js(key, value),
         sip7::Record::Blob { key, value } => Record::blob(key, value),
         sip7::Record::Sig { signer, rev, sig } => Record::sig(
             &signer.to_string(),
@@ -638,6 +667,14 @@ impl Record {
     pub fn txt(key: &str, value: JsValue) -> JsValue {
         let obj = js_sys::Object::new();
         js_sys::Reflect::set(&obj, &"type".into(), &"txt".into()).unwrap();
+        js_sys::Reflect::set(&obj, &"key".into(), &key.into()).unwrap();
+        js_sys::Reflect::set(&obj, &"value".into(), &value).unwrap();
+        obj.into()
+    }
+
+    pub fn addr(key: &str, value: JsValue) -> JsValue {
+        let obj = js_sys::Object::new();
+        js_sys::Reflect::set(&obj, &"type".into(), &"addr".into()).unwrap();
         js_sys::Reflect::set(&obj, &"key".into(), &key.into()).unwrap();
         js_sys::Reflect::set(&obj, &"value".into(), &value).unwrap();
         obj.into()
