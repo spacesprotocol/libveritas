@@ -121,23 +121,21 @@ impl CertificateChain {
 }
 
 
-/// A slim offline backup certificate for space handle ownership.
+/// Offline certificate for space handle ownership.
 ///
-/// Certificate contains only data that cannot be recovered from a spaced client:
-/// - The ZK receipt (for root certs, produced by the operator)
+/// Contains data not recoverable from on-chain state:
+/// - ZK receipt (root certs, from the operator)
 /// - Handle subtree proofs (from the operator's off-chain tree)
 /// - Signatures and identity information
 ///
-/// On-chain proofs (spaces tree, nums tree) are always recoverable from any
-/// spaced client and are not stored in the certificate. They are assembled
-/// into a [`CertificateBundle`](crate::bundle::CertificateBundle) for verification.
+/// On-chain proofs (spaces tree, nums tree) are recovered from a
+/// spaced client and combined with the certificate during verification.
 ///
-/// # Certificate Types
-///
-/// - **Root certificates** (`Witness::Root`) — for top-level spaces (e.g., `@bitcoin`)
-/// - **Leaf certificates** (`Witness::Leaf`) — for handles under a space (e.g., `alice@bitcoin`)
-///   - Final: handle is committed to the operator's tree (inclusion proof)
-///   - Temporary: handle is authorized by parent signature (exclusion proof)
+/// Types:
+/// - **Root** (`Witness::Root`) — top-level spaces (e.g., `@bitcoin`)
+/// - **Leaf** (`Witness::Leaf`) — handles under a space (e.g., `alice@bitcoin`)
+///   - Final: committed to the operator's tree (inclusion proof)
+///   - Temporary: authorized by parent signature (exclusion proof)
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Certificate {
     /// Certificate format version for future compatibility.

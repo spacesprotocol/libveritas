@@ -648,6 +648,8 @@ pub enum SignatureError {
     InvalidSignature,
     /// Signature verification failed
     VerificationFailed,
+    /// Sig record canonical name doesn't match expected
+    SignerMismatch,
 }
 
 impl fmt::Display for SignatureError {
@@ -656,6 +658,7 @@ impl fmt::Display for SignatureError {
             Self::InvalidPublicKey => write!(f, "invalid schnorr public key"),
             Self::InvalidSignature => write!(f, "invalid signature format"),
             Self::VerificationFailed => write!(f, "signature verification failed"),
+            Self::SignerMismatch => write!(f, "sig record canonical name mismatch"),
         }
     }
 }

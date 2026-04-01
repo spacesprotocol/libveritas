@@ -473,20 +473,15 @@ pub struct TestHandleTree {
 
 impl TestHandle {
     pub fn set_records(&mut self, data: sip7::RecordSet, signer: &SName) {
-        // Pack with empty sig for signing
-        let with_sig = msg::pack_sig(signer, signer, &data)
-            .expect("pack_sig");
-        let sig = sign_mesage(with_sig.as_slice(), &self.keypair);
-        // Re-pack with actual signature
-        let mut records = with_sig.unpack().expect("unpack");
-        for r in &mut records {
-            if let sip7::Record::Sig { sig: s, .. } = r {
-                if s.is_empty() {
-                    *s = sig.0.to_vec();
-                }
-            }
-        }
-        self.records = Some(sip7::RecordSet::pack(records).expect("repack"));
+        let unsigned = msg::UnsignedRecordSet {
+            handle: signer.clone(),
+            canonical: signer.clone(),
+            flags: sip7::SIG_PRIMARY_ZONE,
+            records: data,
+            delegate: false,
+        };
+        let sig = sign_mesage(&unsigned.signable_bytes(), &self.keypair);
+        self.records = Some(unsigned.pack_sig(sig.0.to_vec()));
     }
 }
 

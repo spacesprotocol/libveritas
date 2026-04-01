@@ -57,7 +57,6 @@ pub struct DataUpdateEntry {
     pub name: String,
     pub records: Option<Vec<u8>>,
     pub delegate_records: Option<Vec<u8>>,
-    pub rev: bool,
 }
 
 // -- Conversions --
@@ -85,7 +84,6 @@ fn parse_data_update(entry: &DataUpdateEntry) -> Result<builder::DataUpdateReque
         handle,
         records,
         delegate_records,
-        rev: entry.rev,
     })
 }
 
@@ -269,7 +267,7 @@ pub struct Message {
 
 #[uniffi::export]
 impl Message {
-    /// Decode a message from borsh bytes.
+    /// Decode a message from bytes.
     #[uniffi::constructor]
     pub fn new(bytes: Vec<u8>) -> Result<Self, VeritasError> {
         let inner = msg::Message::from_slice(&bytes)
@@ -279,7 +277,7 @@ impl Message {
         Ok(Message { inner: RwLock::new(inner) })
     }
 
-    /// Serialize the message to borsh bytes.
+    /// Serialize the message to bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
         self.inner.read().unwrap().to_bytes()
     }
@@ -291,32 +289,79 @@ impl Message {
         Ok(())
     }
 
-    /// Set the signature on an unsigned record set.
-    pub fn set_signature(&self, signer: String, signature: Vec<u8>) -> Result<(), VeritasError> {
-        let sname = SName::from_str(&signer).map_err(|e| VeritasError::InvalidInput {
-            msg: format!("invalid signer: {e}"),
+    /// Set records on the message for a canonical name.
+    pub fn set_records(&self, canonical: String, records_bytes: Vec<u8>) -> Result<(), VeritasError> {
+        let sname = SName::from_str(&canonical).map_err(|e| VeritasError::InvalidInput {
+            msg: format!("invalid canonical: {e}"),
         })?;
-        self.inner.write().unwrap().set_signature(&sname, signature);
+        self.inner.write().unwrap().set_records(&sname, sip7::RecordSet::new(records_bytes));
+        Ok(())
+    }
+
+    /// Set delegate records on the message for a canonical name.
+    pub fn set_delegate_records(&self, canonical: String, records_bytes: Vec<u8>) -> Result<(), VeritasError> {
+        let sname = SName::from_str(&canonical).map_err(|e| VeritasError::InvalidInput {
+            msg: format!("invalid canonical: {e}"),
+        })?;
+        self.inner.write().unwrap().set_delegate_records(&sname, sip7::RecordSet::new(records_bytes));
         Ok(())
     }
 }
 
 /// An unsigned record set pending signature.
-#[derive(uniffi::Record)]
-pub struct UnsignedRecord {
+#[derive(uniffi::Object)]
+pub struct UnsignedRecordSet {
+    inner: RwLock<msg::UnsignedRecordSet>,
+}
+
+#[uniffi::export]
+impl UnsignedRecordSet {
     /// The original handle name (before flattening).
-    pub handle: String,
-    /// The canonical/flattened signer name. Pass to `Message.setSignature()`.
-    pub signer: String,
-    /// The 32-byte signing hash.
-    pub signing_id: Vec<u8>,
+    pub fn handle(&self) -> String {
+        self.inner.read().unwrap().handle.to_string()
+    }
+
+    /// The canonical/flattened name.
+    pub fn canonical(&self) -> String {
+        self.inner.read().unwrap().canonical.to_string()
+    }
+
+    /// Whether these are delegate records.
+    pub fn is_delegate(&self) -> bool {
+        self.inner.read().unwrap().delegate
+    }
+
+    /// Current sig flags.
+    pub fn flags(&self) -> u8 {
+        self.inner.read().unwrap().flags
+    }
+
+    /// Set sig flags (e.g. `SIG_PRIMARY_ZONE`).
+    pub fn set_flags(&self, flags: u8) {
+        self.inner.write().unwrap().flags = flags;
+    }
+
+    /// The raw signable bytes (before hashing). Use when the signer doesn't take a digest.
+    pub fn signable_bytes(&self) -> Vec<u8> {
+        self.inner.read().unwrap().signable_bytes()
+    }
+
+    /// The 32-byte signing hash (Spaces signed-message prefix + SHA256).
+    pub fn signing_id(&self) -> Vec<u8> {
+        self.inner.read().unwrap().signing_id().to_vec()
+    }
+
+    /// Pack the Sig record with the given signature. Returns signed RecordSet wire bytes.
+    pub fn pack_sig(&self, signature: Vec<u8>) -> Vec<u8> {
+        self.inner.read().unwrap().pack_sig(signature).as_slice().to_vec()
+    }
 }
 
 /// Result of building a message.
 #[derive(uniffi::Record)]
 pub struct BuildResult {
     pub message: Arc<Message>,
-    pub unsigned: Vec<UnsignedRecord>,
+    pub unsigned: Vec<Arc<UnsignedRecordSet>>,
 }
 
 /// Builder for constructing messages from update requests and chain proofs.
@@ -336,7 +381,7 @@ impl MessageBuilder {
     }
 
     /// Add a .spacecert chain with records (sip7 wire bytes).
-    pub fn add_handle(&self, chain_bytes: Vec<u8>, records_bytes: Vec<u8>, rev: bool) -> Result<(), VeritasError> {
+    pub fn add_handle(&self, chain_bytes: Vec<u8>, records_bytes: Vec<u8>) -> Result<(), VeritasError> {
         let chain = libveritas::cert::CertificateChain::from_slice(&chain_bytes)
             .map_err(|e| VeritasError::InvalidInput {
                 msg: format!("invalid chain: {e}"),
@@ -347,7 +392,7 @@ impl MessageBuilder {
             .ok_or_else(|| VeritasError::InvalidInput {
                 msg: "builder already consumed by build()".to_string(),
             })?
-            .add_handle(chain, records, rev);
+            .add_handle(chain, records);
         Ok(())
     }
 
@@ -382,7 +427,7 @@ impl MessageBuilder {
     }
 
     /// Add records for a handle (sip7 wire bytes).
-    pub fn add_records(&self, handle: String, records_bytes: Vec<u8>, rev: bool) -> Result<(), VeritasError> {
+    pub fn add_records(&self, handle: String, records_bytes: Vec<u8>) -> Result<(), VeritasError> {
         let sname = SName::from_str(&handle)
             .map_err(|e| VeritasError::InvalidInput {
                 msg: format!("invalid handle: {e}"),
@@ -393,7 +438,7 @@ impl MessageBuilder {
             .ok_or_else(|| VeritasError::InvalidInput {
                 msg: "builder already consumed by build()".to_string(),
             })?
-            .add_records(sname, records, rev);
+            .add_records(sname, records);
         Ok(())
     }
 
@@ -425,12 +470,10 @@ impl MessageBuilder {
             })
     }
 
-    /// Build the message from a borsh-encoded ChainProof.
+    /// Build the message from a ChainProof.
     ///
     /// Consumes the builder — cannot be called twice.
-    ///
-    /// Returns the message and a list of unsigned records that need signing.
-    /// After signing, call `message.setSignature(signer, sig)` for each.
+    /// Returns the message and unsigned record sets that need signing.
     pub fn build(&self, chain_proof: Vec<u8>) -> Result<BuildResult, VeritasError> {
         let builder = self
             .inner
@@ -451,11 +494,9 @@ impl MessageBuilder {
             })?;
         Ok(BuildResult {
             message: Arc::new(Message { inner: RwLock::new(inner_msg) }),
-            unsigned: unsigned.into_iter().map(|u| UnsignedRecord {
-                handle: u.handle.to_string(),
-                signer: u.signer.to_string(),
-                signing_id: u.signing_id.to_vec(),
-            }).collect(),
+            unsigned: unsigned.into_iter().map(|u| Arc::new(UnsignedRecordSet {
+                inner: RwLock::new(u),
+            })).collect(),
         })
     }
 }
@@ -490,7 +531,7 @@ pub enum Record {
     Txt { key: String, value: Vec<String> },
     Addr { key: String, value: Vec<String> },
     Blob { key: String, value: Vec<u8> },
-    Sig { signer: String, rev: String, sig: Vec<u8> },
+    Sig { flags: u8, canonical: String, handle: String, sig: Vec<u8> },
     Unknown { rtype: u8, rdata: Vec<u8> },
 }
 
@@ -501,9 +542,10 @@ impl From<sip7::Record> for Record {
             sip7::Record::Txt { key, value } => Record::Txt { key, value },
             sip7::Record::Addr { key, value } => Record::Addr { key, value },
             sip7::Record::Blob { key, value } => Record::Blob { key, value },
-            sip7::Record::Sig { signer, rev, sig } => Record::Sig {
-                signer: signer.to_string(),
-                rev: rev.to_string(),
+            sip7::Record::Sig { flags, canonical, handle, sig } => Record::Sig {
+                flags,
+                canonical: canonical.to_string(),
+                handle: handle.to_string(),
                 sig,
             },
             sip7::Record::Unknown { rtype, rdata } => Record::Unknown { rtype, rdata },
@@ -524,14 +566,14 @@ impl From<Record> for sip7::Record {
                 sip7::Record::addr(&key, &refs)
             }
             Record::Blob { key, value } => sip7::Record::blob(&key, value),
-            Record::Sig { signer, rev, sig } => {
-                let signer = SName::from_str(&signer).expect("valid signer");
-                let rev = if rev.is_empty() {
+            Record::Sig { flags, canonical, handle, sig } => {
+                let canonical = SName::from_str(&canonical).expect("valid canonical");
+                let handle = if handle.is_empty() {
                     SName::empty()
                 } else {
-                    SName::from_str(&rev).expect("valid rev")
+                    SName::from_str(&handle).expect("valid handle")
                 };
-                sip7::Record::sig(signer, rev, sig)
+                sip7::Record::sig(canonical, handle, sig, flags)
             }
             Record::Unknown { rtype, rdata } => sip7::Record::unknown(rtype, rdata),
         }
@@ -695,7 +737,7 @@ impl VerifiedMessage {
         })
     }
 
-    /// Get the verified message as borsh bytes.
+    /// Get the verified message as bytes.
     pub fn message_bytes(&self) -> Vec<u8> {
         self.inner.message.to_bytes()
     }
@@ -771,6 +813,9 @@ pub fn verify_dev_mode() -> u32 { libveritas::VERIFY_DEV_MODE }
 #[uniffi::export]
 pub fn verify_enable_snark() -> u32 { libveritas::VERIFY_ENABLE_SNARK }
 
+#[uniffi::export]
+pub fn sig_primary_zone() -> u8 { sip7::SIG_PRIMARY_ZONE }
+
 /// Hash a message with the Spaces signed-message prefix (SHA256).
 /// Returns the 32-byte digest suitable for Schnorr signing/verification.
 #[uniffi::export]
@@ -828,7 +873,7 @@ pub fn decode_zone(bytes: Vec<u8>) -> Result<Zone, VeritasError> {
     Ok(zone_from_inner(&zone))
 }
 
-/// Serialize a Zone record to borsh bytes for storage.
+/// Serialize a Zone record to bytes for storage.
 #[uniffi::export]
 pub fn zone_to_bytes(zone: Zone) -> Result<Vec<u8>, VeritasError> {
     let inner = zone_to_inner(&zone)?;
