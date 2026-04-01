@@ -172,9 +172,9 @@ pub struct Zone {
     /// The current script pubkey that controls this handle.
     pub script_pubkey: ScriptBuf,
     /// Verified off-chain records from the handle owner.
-    pub records: Option<sip7::RecordSet>,
+    pub records: sip7::RecordSet,
     /// Optional on-chain data associated with the handle.
-    pub fallback_records: Option<sip7::RecordSet>,
+    pub fallback_records: sip7::RecordSet,
     /// Delegate information if the handle has delegated signing authority.
     pub delegate: ProvableOption<Delegate>,
     /// Commitment information including state root and finality status.
@@ -220,8 +220,8 @@ impl CommitmentInfo {
 pub struct Delegate {
     pub script_pubkey: ScriptBuf,
     /// Verified off-chain records from the delegate.
-    pub records: Option<sip7::RecordSet>,
-    pub fallback_records: Option<sip7::RecordSet>,
+    pub records: sip7::RecordSet,
+    pub fallback_records: sip7::RecordSet,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -261,22 +261,20 @@ impl BorshDeserialize for SovereigntyState {
 impl BorshSerialize for Delegate {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         BorshSerialize::serialize(&self.script_pubkey.as_bytes().to_vec(), writer)?;
-        let fallback_bytes: Option<Vec<u8>> = self.fallback_records.as_ref().map(|d| d.as_slice().to_vec());
-        BorshSerialize::serialize(&fallback_bytes, writer)?;
-        let records_bytes: Option<Vec<u8>> = self.records.as_ref().map(|d| d.as_slice().to_vec());
-        BorshSerialize::serialize(&records_bytes, writer)
+        BorshSerialize::serialize(&self.fallback_records.as_slice().to_vec(), writer)?;
+        BorshSerialize::serialize(&self.records.as_slice().to_vec(), writer)
     }
 }
 
 impl BorshDeserialize for Delegate {
     fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
         let spk_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
-        let fallback_bytes: Option<Vec<u8>> = Option::<Vec<u8>>::deserialize_reader(reader)?;
-        let records_bytes: Option<Vec<u8>> = Option::<Vec<u8>>::deserialize_reader(reader)?;
+        let fallback_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
+        let records_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
         Ok(Delegate {
             script_pubkey: ScriptBuf::from_bytes(spk_bytes),
-            fallback_records: fallback_bytes.map(sip7::RecordSet::new),
-            records: records_bytes.map(sip7::RecordSet::new),
+            fallback_records: sip7::RecordSet::new(fallback_bytes),
+            records: sip7::RecordSet::new(records_bytes),
         })
     }
 }
@@ -335,10 +333,8 @@ impl BorshSerialize for Zone {
         BorshSerialize::serialize(&self.handle, writer)?;
         BorshSerialize::serialize(&self.alias, writer)?;
         BorshSerialize::serialize(&self.script_pubkey.as_bytes().to_vec(), writer)?;
-        let fallback_bytes: Option<Vec<u8>> = self.fallback_records.as_ref().map(|d| d.as_slice().to_vec());
-        BorshSerialize::serialize(&fallback_bytes, writer)?;
-        let records_bytes: Option<Vec<u8>> = self.records.as_ref().map(|d| d.as_slice().to_vec());
-        BorshSerialize::serialize(&records_bytes, writer)?;
+        BorshSerialize::serialize(&self.fallback_records.as_slice().to_vec(), writer)?;
+        BorshSerialize::serialize(&self.records.as_slice().to_vec(), writer)?;
         BorshSerialize::serialize(&self.delegate, writer)?;
         BorshSerialize::serialize(&self.commitment, writer)?;
         BorshSerialize::serialize(&self.num_id, writer)
@@ -353,8 +349,8 @@ impl BorshDeserialize for Zone {
         let handle = SName::deserialize_reader(reader)?;
         let alias = Option::<SLabel>::deserialize_reader(reader)?;
         let spk_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
-        let fallback_bytes: Option<Vec<u8>> = Option::<Vec<u8>>::deserialize_reader(reader)?;
-        let records_bytes: Option<Vec<u8>> = Option::<Vec<u8>>::deserialize_reader(reader)?;
+        let fallback_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
+        let records_bytes: Vec<u8> = Vec::deserialize_reader(reader)?;
         let delegate: ProvableOption<Delegate> = ProvableOption::deserialize_reader(reader)?;
         let commitment: ProvableOption<CommitmentInfo> = ProvableOption::deserialize_reader(reader)?;
 
@@ -367,8 +363,8 @@ impl BorshDeserialize for Zone {
             canonical,
             alias,
             script_pubkey,
-            fallback_records: fallback_bytes.map(sip7::RecordSet::new),
-            records: records_bytes.map(sip7::RecordSet::new),
+            fallback_records: sip7::RecordSet::new(fallback_bytes),
+            records: sip7::RecordSet::new(records_bytes),
             delegate,
             commitment,
             num_id,
@@ -478,7 +474,7 @@ impl Zone {
     pub fn signing_bytes(&self) -> Vec<u8> {
         let mut zone = self.clone();
         zone.anchor = 0;
-        zone.records = None;
+        zone.records = sip7::RecordSet::default();
         borsh::to_vec(&zone).expect("zone serialization should not fail")
     }
 
@@ -539,13 +535,12 @@ impl Zone {
         // Delegate knowledge
         match (&self.delegate, &other.delegate) {
             (ProvableOption::Exists { value: a }, ProvableOption::Exists { value: b }) => {
-                match (&a.records, &b.records) {
-                    (Some(a), Some(b)) => if records_is_better(a, b) {
+                if !a.records.is_empty() || !b.records.is_empty() {
+                    if a.records.is_empty() { return Ok(false); }
+                    if b.records.is_empty() { return Ok(true); }
+                    if records_is_better(&a.records, &b.records) {
                         return Ok(true);
                     }
-                    (Some(_), None) => return Ok(true),
-                    (None, Some(_)) => return Ok(false),
-                    _ => {}
                 }
             }
             (ProvableOption::Exists { .. }, ProvableOption::Empty | ProvableOption::Unknown) => return Ok(true),
@@ -556,14 +551,12 @@ impl Zone {
         }
 
         // Higher records seq = newer owner-signed records
-        // If seq is equal, compare data hashes for deterministic ordering
-        match (&self.records, &other.records) {
-            (Some(a), Some(b)) => if records_is_better(a, b) {
+        if !self.records.is_empty() || !other.records.is_empty() {
+            if self.records.is_empty() { return Ok(false); }
+            if other.records.is_empty() { return Ok(true); }
+            if records_is_better(&self.records, &other.records) {
                 return Ok(true);
             }
-            (Some(_), None) => return Ok(true),
-            (None, Some(_)) => return Ok(false),
-            _ => {}
         }
 
         // Higher anchor = fresher chain state (tiebreaker)
@@ -1041,10 +1034,11 @@ impl Veritas {
             let Some(space) = spaceout.space else {
                 return Err(MessageError::SpaceNotFound { space: bundle.subject.to_string() });
             };
-            let data = space.data();
-            (spaceout.script_pubkey, data
+            let data = space.data()
                 .filter(|d| !d.is_empty())
-                .map(|d| sip7::RecordSet::new(d.to_vec())))
+                .map(|d| sip7::RecordSet::new(d.to_vec()))
+                .unwrap_or_default();
+            (spaceout.script_pubkey, data)
         } else {
             let Some(numout) = chain.nums
                 .find_numeric(&bundle.subject.clone().try_into().expect("numeric"))
@@ -1052,9 +1046,11 @@ impl Veritas {
                 return Err(MessageError::NumericNotFound { numeric: bundle.subject.to_string() })
             };
             num_id = Some(numout.num.id);
-            (numout.script_pubkey, numout.num.data
+            let data = numout.num.data
                 .filter(|d| !d.is_empty())
-                .map(|d| sip7::RecordSet::new(d.to_vec())))
+                .map(|d| sip7::RecordSet::new(d.to_vec()))
+                .unwrap_or_default();
+            (numout.script_pubkey, data)
         };
 
         let handle = SName::from_space(&bundle.subject);
@@ -1067,12 +1063,11 @@ impl Veritas {
             alias: None,
             script_pubkey: spk,
             fallback_records: records,
-            records: None,
+            records: sip7::RecordSet::default(),
             delegate: ProvableOption::Unknown,
             commitment: ProvableOption::Unknown,
             num_id,
         };
-
 
         // Verify records signature if present
         if let Some(records) = &bundle.records {
@@ -1081,7 +1076,7 @@ impl Veritas {
                     handle: z.handle.to_string(),
                     reason: e.to_string(),
                 })?;
-            z.records = Some(records.clone());
+            z.records = records.clone();
         }
 
         // Extract delegate info
@@ -1089,21 +1084,22 @@ impl Veritas {
             match delegate {
                 None => z.delegate = ProvableOption::Empty,
                 Some(delegate) => {
-                    let mut delegate_records = None;
+                    let mut delegate_records = sip7::RecordSet::default();
                     if let Some(records) = &bundle.delegate_records {
                         msg::verify_records(records, &delegate.script_pubkey, &z.canonical)
                             .map_err(|e| MessageError::RecordsInvalid {
                                 handle: z.handle.to_string(),
                                 reason: e.to_string(),
                             })?;
-                        delegate_records = Some(records.clone());
+                        delegate_records = records.clone();
                     }
                     z.delegate = ProvableOption::Exists {
                         value: Delegate {
                             script_pubkey: delegate.script_pubkey,
                             fallback_records: delegate.num.data
                                 .filter(|d| !d.is_empty())
-                                .map(|d| sip7::RecordSet::new(d.to_vec())),
+                                .map(|d| sip7::RecordSet::new(d.to_vec()))
+                                .unwrap_or_default(),
                             records: delegate_records,
                         },
                     }
@@ -1161,14 +1157,14 @@ fn verify_temporary_handle(
         }
     };
 
-    let mut verified_records = None;
+    let mut verified_records = sip7::RecordSet::default();
     if let Some(records) = &handle.records {
         msg::verify_records(records, &handle.genesis_spk, &subject)
             .map_err(|e| MessageError::RecordsInvalid {
                 handle: subject.to_string(),
                 reason: e.to_string(),
             })?;
-        verified_records = Some(records.clone());
+        verified_records = records.clone();
     }
 
     let num_id = Some(NumId::from_spk::<KeyHash>(handle.genesis_spk.clone()));
@@ -1179,7 +1175,7 @@ fn verify_temporary_handle(
         handle: subject.clone(),
         alias: None,
         script_pubkey: handle.genesis_spk.clone(),
-        fallback_records: None,
+        fallback_records: sip7::RecordSet::default(),
         records: verified_records,
         delegate: ProvableOption::Unknown,
         commitment: ProvableOption::Unknown,
@@ -1232,20 +1228,21 @@ fn verify_final_handle(
             numout.script_pubkey,
             numout.num.data
                 .filter(|d| !d.is_empty())
-                .map(|d| sip7::RecordSet::new(d.to_vec())),
+                .map(|d| sip7::RecordSet::new(d.to_vec()))
+                .unwrap_or_default(),
             Some(numout.num.name.to_slabel())
         ),
-        None => (NumId::from_spk::<KeyHash>(handle.genesis_spk.clone()), handle.genesis_spk.clone(), None, None),
+        None => (NumId::from_spk::<KeyHash>(handle.genesis_spk.clone()), handle.genesis_spk.clone(), sip7::RecordSet::default(), None),
     };
 
-    let mut verified_records = None;
+    let mut verified_records = sip7::RecordSet::default();
     if let Some(records) = &handle.records {
         msg::verify_records(records, &spk, &subject)
             .map_err(|e| MessageError::RecordsInvalid {
                 handle: subject.to_string(),
                 reason: e.to_string(),
             })?;
-        verified_records = Some(records.clone());
+        verified_records = records.clone();
     }
 
     let zone = Zone {

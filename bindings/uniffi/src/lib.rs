@@ -25,7 +25,7 @@ pub enum VeritasError {
 
 #[derive(uniffi::Enum)]
 pub enum DelegateState {
-    Exists { script_pubkey: Vec<u8>, fallback_records: Option<Vec<u8>>, records: Option<Vec<u8>> },
+    Exists { script_pubkey: Vec<u8>, fallback_records: Vec<u8>, records: Vec<u8> },
     Empty,
     Unknown,
 }
@@ -102,8 +102,8 @@ pub struct Zone {
     pub alias: Option<String>,
     pub script_pubkey: Vec<u8>,
     pub num_id: Option<String>,
-    pub records: Option<Vec<u8>>,
-    pub fallback_records: Option<Vec<u8>>,
+    pub records: Vec<u8>,
+    pub fallback_records: Vec<u8>,
     pub delegate: DelegateState,
     pub commitment: CommitmentState,
 }
@@ -117,13 +117,13 @@ fn zone_from_inner(z: &libveritas::Zone) -> Zone {
         alias: z.alias.as_ref().map(|a| a.to_string()),
         script_pubkey: z.script_pubkey.as_bytes().to_vec(),
         num_id: z.num_id.map(|n| n.to_string()),
-        records: z.records.as_ref().map(|d| d.as_slice().to_vec()),
-        fallback_records: z.fallback_records.as_ref().map(|d| d.as_slice().to_vec()),
+        records: z.records.as_slice().to_vec(),
+        fallback_records: z.fallback_records.as_slice().to_vec(),
         delegate: match &z.delegate {
             libveritas::ProvableOption::Exists { value } => DelegateState::Exists {
                 script_pubkey: value.script_pubkey.as_bytes().to_vec(),
-                fallback_records: value.fallback_records.as_ref().map(|d| d.as_slice().to_vec()),
-                records: value.records.as_ref().map(|d| d.as_slice().to_vec()),
+                fallback_records: value.fallback_records.as_slice().to_vec(),
+                records: value.records.as_slice().to_vec(),
             },
             libveritas::ProvableOption::Empty => DelegateState::Empty,
             libveritas::ProvableOption::Unknown => DelegateState::Unknown,
@@ -166,8 +166,8 @@ fn zone_to_inner(z: &Zone) -> Result<libveritas::Zone, VeritasError> {
             libveritas::ProvableOption::Exists {
                 value: libveritas::Delegate {
                     script_pubkey: ScriptBuf::from_bytes(script_pubkey.clone()),
-                    fallback_records: fallback_records.as_ref().map(|d| sip7::RecordSet::new(d.clone())),
-                    records: records.as_ref().map(|d| sip7::RecordSet::new(d.clone())),
+                    fallback_records: sip7::RecordSet::new(fallback_records.clone()),
+                    records: sip7::RecordSet::new(records.clone()),
                 },
             }
         }
@@ -217,8 +217,8 @@ fn zone_to_inner(z: &Zone) -> Result<libveritas::Zone, VeritasError> {
         canonical,
         alias,
         script_pubkey: ScriptBuf::from_bytes(z.script_pubkey.clone()),
-        records: z.records.as_ref().map(|d| sip7::RecordSet::new(d.clone())),
-        fallback_records: z.fallback_records.as_ref().map(|d| sip7::RecordSet::new(d.clone())),
+        records: sip7::RecordSet::new(z.records.clone()),
+        fallback_records: sip7::RecordSet::new(z.fallback_records.clone()),
         delegate,
         commitment,
         num_id,
