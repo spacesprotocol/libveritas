@@ -78,9 +78,9 @@ impl MessageBuilder {
 
     /// Build the message from a chain proof.
     ///
-    /// Appends Sig records (with empty signatures) to all record sets.
-    /// Returns the message and a list of unsigned records that need signing.
-    /// Call `msg.set_signature()` for each after signing.
+    /// Returns the message and unsigned record sets that need signing.
+    /// Call `unsigned.signing_id()` to get the hash, sign it,
+    /// then `unsigned.pack_sig(sig)` and `msg.set_records(canonical, signed)`.
     pub fn build(self, chain: ChainProof) -> Result<(Message, Vec<UnsignedRecordSet>), MessageError> {
         let certs = dedup_root_certs(self.certs, &chain);
         let resolver = NameResolver::from_certificates(&certs, &chain.nums);

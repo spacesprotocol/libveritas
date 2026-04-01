@@ -96,18 +96,18 @@ impl Message {
         borsh::to_vec(self).expect("message serialization should not fail")
     }
 
-    pub fn set_delegate_records(&mut self, handle: &SName, data: sip7::RecordSet) {
-        self.set_records_inner(handle, data, true)
+    pub fn set_delegate_records(&mut self, canonical: &SName, data: sip7::RecordSet) {
+        self.set_records_inner(canonical, data, true)
     }
 
-    pub fn set_records(&mut self, handle: &SName, data: sip7::RecordSet) {
-        self.set_records_inner(handle, data, false)
+    pub fn set_records(&mut self, canonical: &SName, data: sip7::RecordSet) {
+        self.set_records_inner(canonical, data, false)
     }
 
-    fn set_records_inner(&mut self, handle: &SName, data: sip7::RecordSet, delegate: bool) {
-        let (space, subspace) = match handle.label_count() {
-            1 => (handle.space().unwrap(), None),
-            2 => (handle.space().unwrap(), Some(handle.subspace().unwrap())),
+    fn set_records_inner(&mut self, canonical: &SName, data: sip7::RecordSet, delegate: bool) {
+        let (space, subspace) = match canonical.label_count() {
+            1 => (canonical.space().unwrap(), None),
+            2 => (canonical.space().unwrap(), Some(canonical.subspace().unwrap())),
             _ => return,
         };
 
@@ -223,23 +223,18 @@ pub struct ChainProof {
     pub nums: NumsSubtree,
 }
 
-/// Data for a single space, including its tip receipt and handle epochs.
+/// Per-space data: ZK receipt, signed records, and handle epochs.
 #[derive(Clone)]
 pub struct Bundle {
-    /// The subject this bundle is for (e.g., "@bitcoin", "#222-2-2").
+    /// Space subject (e.g., `@bitcoin`, `#222-2-2`).
     pub subject: SLabel,
-    /// ZK receipt proving the tip epoch. `None` if the tip is finalized
-    /// and the verifier's cache covers it, or for first-commitment spaces.
-    /// When present, the journal decodes to the tip's final_root.
+    /// ZK receipt for the tip epoch (None if finalized or first commitment).
     pub receipt: Option<Receipt>,
-    /// Signed records from the space owner.
+    /// Owner-signed records (RecordSet with embedded Sig record).
     pub records: Option<sip7::RecordSet>,
-    /// Signed records from the delegate.
+    /// Delegate-signed records (RecordSet with embedded Sig record).
     pub delegate_records: Option<sip7::RecordSet>,
-    /// Handle epochs for this space. Each epoch corresponds to a committed
-    /// state root. The tip epoch (if handles are being proven against it)
-    /// should have `tree.compute_root()` matching the receipt's final_root
-    /// or the on-chain tip from the chain proof.
+    /// Handle epochs, each corresponding to a committed state root.
     pub epochs: Vec<Epoch>,
 }
 
@@ -253,30 +248,24 @@ impl Bundle {
     }
 }
 
-/// A snapshot of the handle tree at a specific commitment.
-///
-/// The epoch's root is derived via `tree.compute_root()` and verified
-/// against the chain proof. Block height is looked up from the on-chain
-/// commitment data, not stored here.
+/// Handle tree snapshot at a specific commitment.
 #[derive(Clone)]
 pub struct Epoch {
-    /// Merkle proof for handles in this epoch (inclusion or exclusion).
+    /// Merkle proof for handles (inclusion or exclusion).
     pub tree: HandleSubtree,
-    /// Handles being proven in this epoch.
     pub handles: Vec<Handle>,
 }
 
 /// A handle being proven within an epoch.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Handle {
-    /// The handle name (e.g., "alice" for "alice@bitcoin").
+    /// Subname (e.g., "alice" for "alice@bitcoin").
     pub name: Subname,
-    /// The genesis script pubkey the handle was initialized with.
+    /// Genesis script pubkey.
     pub genesis_spk: ScriptBuf,
-    /// Signed records from the handle owner (RecordSet with embedded Sig record).
+    /// Owner-signed records (RecordSet with embedded Sig record).
     pub records: Option<sip7::RecordSet>,
-    /// Signature from the delegate for temporary certificates.
-    /// `None` for final certificates (handle committed to tree).
+    /// Delegate signature for temporary certificates (None for final).
     pub signature: Option<Signature>,
 }
 
@@ -291,10 +280,7 @@ impl Handle {
 }
 
 /// Verify the Sig record in a RecordSet against a script pubkey.
-///
-/// 1. Extracts signable payload and sig data via `RecordSet::signable()`
-/// 2. Checks canonical name matches expected
-/// 3. Verifies schnorr signature against script_pubkey
+/// Checks that the canonical name matches and the schnorr signature is valid.
 pub fn verify_records(
     records: &sip7::RecordSet,
     script_pubkey: &ScriptBuf,
@@ -328,15 +314,15 @@ pub fn verify_records(
 
 /// An unsigned record set pending signature.
 pub struct UnsignedRecordSet {
+    /// Original handle name (e.g., `example.alice@bitcoin`).
     pub handle: SName,
-
+    /// Canonical/flattened name (e.g., `example#800-12-12`).
     pub canonical: SName,
-
+    /// Sig record flags (e.g., `SIG_PRIMARY_ZONE`).
     pub flags: u8,
-
+    /// The unsigned records.
     pub records: RecordSet,
-
-    /// whether these are delegate records
+    /// Whether these are delegate records.
     pub delegate: bool,
 }
 

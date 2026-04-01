@@ -140,7 +140,7 @@ pub struct Message {
 
 #[wasm_bindgen]
 impl Message {
-    /// Decode a message from borsh bytes.
+    /// Decode a message from bytes.
     #[wasm_bindgen(constructor)]
     pub fn from_bytes(bytes: &[u8]) -> Result<Message, JsError> {
         let inner = msg::Message::from_slice(bytes)
@@ -148,7 +148,7 @@ impl Message {
         Ok(Message { inner })
     }
 
-    /// Serialize the message to borsh bytes.
+    /// Serialize the message to bytes.
     #[wasm_bindgen(js_name = "toBytes")]
     pub fn to_bytes(&self) -> Vec<u8> {
         self.inner.to_bytes()
@@ -171,20 +171,20 @@ impl Message {
         Ok(())
     }
 
-    /// Set records on the message for a handle.
+    /// Set records on the message for a canonical name.
     #[wasm_bindgen(js_name = "setRecords")]
-    pub fn set_records(&mut self, handle: &str, records_bytes: &[u8]) -> Result<(), JsError> {
-        let sname = SName::from_str(handle)
-            .map_err(|e| JsError::new(&format!("invalid handle: {e}")))?;
+    pub fn set_records(&mut self, canonical: &str, records_bytes: &[u8]) -> Result<(), JsError> {
+        let sname = SName::from_str(canonical)
+            .map_err(|e| JsError::new(&format!("invalid canonical: {e}")))?;
         self.inner.set_records(&sname, sip7::RecordSet::new(records_bytes.to_vec()));
         Ok(())
     }
 
-    /// Set delegate records on the message for a handle.
+    /// Set delegate records on the message for a canonical name.
     #[wasm_bindgen(js_name = "setDelegateRecords")]
-    pub fn set_delegate_records(&mut self, handle: &str, records_bytes: &[u8]) -> Result<(), JsError> {
-        let sname = SName::from_str(handle)
-            .map_err(|e| JsError::new(&format!("invalid handle: {e}")))?;
+    pub fn set_delegate_records(&mut self, canonical: &str, records_bytes: &[u8]) -> Result<(), JsError> {
+        let sname = SName::from_str(canonical)
+            .map_err(|e| JsError::new(&format!("invalid canonical: {e}")))?;
         self.inner.set_delegate_records(&sname, sip7::RecordSet::new(records_bytes.to_vec()));
         Ok(())
     }
@@ -275,14 +275,10 @@ impl MessageBuilder {
         to_js(&builder.chain_proof_request())
     }
 
-    /// Build the message from a borsh-encoded ChainProof.
+    /// Build the message from a ChainProof.
     ///
     /// Consumes the builder — cannot be called twice.
-    ///
-    /// Returns `{ message, unsigned }` where `unsigned` is an array of
-    /// `UnsignedRecordSet` objects. Call `.signingId()` to get the hash,
-    /// sign it, then `.packSig(sig)` to get the signed bytes.
-    /// Finally call `message.setRecords(canonical, signedBytes)`.
+    /// Returns `{ message, unsigned }` with unsigned record sets that need signing.
     pub fn build(&mut self, chain_proof: &[u8]) -> Result<JsValue, JsError> {
         let builder = self
             .inner
@@ -493,7 +489,7 @@ impl VerifiedMessage {
         }
     }
 
-    /// Get the verified message as borsh bytes.
+    /// Get the verified message as bytes.
     #[wasm_bindgen(js_name = "messageBytes")]
     pub fn message_bytes(&self) -> Vec<u8> {
         self.inner.message.to_bytes()
@@ -871,7 +867,7 @@ pub fn decode_zone(bytes: &[u8]) -> Result<JsValue, JsError> {
     zone_to_js(&zone)
 }
 
-/// Serialize a zone JS object to borsh bytes for storage.
+/// Serialize a zone JS object to bytes for storage.
 #[wasm_bindgen(js_name = "zoneToBytes")]
 pub fn zone_to_bytes(zone: JsValue) -> Result<Vec<u8>, JsError> {
     let inner = zone_from_js(&zone)?;

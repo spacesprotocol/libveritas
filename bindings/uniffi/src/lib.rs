@@ -267,7 +267,7 @@ pub struct Message {
 
 #[uniffi::export]
 impl Message {
-    /// Decode a message from borsh bytes.
+    /// Decode a message from bytes.
     #[uniffi::constructor]
     pub fn new(bytes: Vec<u8>) -> Result<Self, VeritasError> {
         let inner = msg::Message::from_slice(&bytes)
@@ -277,7 +277,7 @@ impl Message {
         Ok(Message { inner: RwLock::new(inner) })
     }
 
-    /// Serialize the message to borsh bytes.
+    /// Serialize the message to bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
         self.inner.read().unwrap().to_bytes()
     }
@@ -289,19 +289,19 @@ impl Message {
         Ok(())
     }
 
-    /// Set records on the message for a handle.
-    pub fn set_records(&self, handle: String, records_bytes: Vec<u8>) -> Result<(), VeritasError> {
-        let sname = SName::from_str(&handle).map_err(|e| VeritasError::InvalidInput {
-            msg: format!("invalid handle: {e}"),
+    /// Set records on the message for a canonical name.
+    pub fn set_records(&self, canonical: String, records_bytes: Vec<u8>) -> Result<(), VeritasError> {
+        let sname = SName::from_str(&canonical).map_err(|e| VeritasError::InvalidInput {
+            msg: format!("invalid canonical: {e}"),
         })?;
         self.inner.write().unwrap().set_records(&sname, sip7::RecordSet::new(records_bytes));
         Ok(())
     }
 
-    /// Set delegate records on the message for a handle.
-    pub fn set_delegate_records(&self, handle: String, records_bytes: Vec<u8>) -> Result<(), VeritasError> {
-        let sname = SName::from_str(&handle).map_err(|e| VeritasError::InvalidInput {
-            msg: format!("invalid handle: {e}"),
+    /// Set delegate records on the message for a canonical name.
+    pub fn set_delegate_records(&self, canonical: String, records_bytes: Vec<u8>) -> Result<(), VeritasError> {
+        let sname = SName::from_str(&canonical).map_err(|e| VeritasError::InvalidInput {
+            msg: format!("invalid canonical: {e}"),
         })?;
         self.inner.write().unwrap().set_delegate_records(&sname, sip7::RecordSet::new(records_bytes));
         Ok(())
@@ -470,12 +470,10 @@ impl MessageBuilder {
             })
     }
 
-    /// Build the message from a borsh-encoded ChainProof.
+    /// Build the message from a ChainProof.
     ///
     /// Consumes the builder — cannot be called twice.
-    ///
-    /// Returns the message and a list of unsigned records that need signing.
-    /// After signing, call `message.setSignature(signer, sig)` for each.
+    /// Returns the message and unsigned record sets that need signing.
     pub fn build(&self, chain_proof: Vec<u8>) -> Result<BuildResult, VeritasError> {
         let builder = self
             .inner
@@ -739,7 +737,7 @@ impl VerifiedMessage {
         })
     }
 
-    /// Get the verified message as borsh bytes.
+    /// Get the verified message as bytes.
     pub fn message_bytes(&self) -> Vec<u8> {
         self.inner.message.to_bytes()
     }
@@ -875,7 +873,7 @@ pub fn decode_zone(bytes: Vec<u8>) -> Result<Zone, VeritasError> {
     Ok(zone_from_inner(&zone))
 }
 
-/// Serialize a Zone record to borsh bytes for storage.
+/// Serialize a Zone record to bytes for storage.
 #[uniffi::export]
 pub fn zone_to_bytes(zone: Zone) -> Result<Vec<u8>, VeritasError> {
     let inner = zone_to_inner(&zone)?;
