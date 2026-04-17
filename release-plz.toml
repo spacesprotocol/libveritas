@@ -52,12 +52,14 @@ git_release_enable = true
 git_release_latest = false
 git_tag_name = "libveritas-v{{ version }}"
 
+# libveritas_zk is a consensus contract — its source feeds the guest ELF
+# under methods/guest/. Excluded from release-plz so version bumps are a
+# deliberate manual act. Bump zk/Cargo.toml + cargo publish -p libveritas_zk
+# when the ZK surface actually changes.
 [[package]]
 name = "libveritas_zk"
-publish = true
-git_release_enable = true
-git_release_latest = false
-git_tag_name = "libveritas_zk-v{{ version }}"
+release = false
+publish = false
 
 # Non-publishable crates: skip versioning, changelog, and releases
 [[package]]

@@ -14,7 +14,7 @@ authors = ["Buffrr <contact@buffrr.dev>"]
 [workspace.dependencies]
 # Internal crates
 libveritas       = { path = "veritas", version = "0.1.1" }
-libveritas_zk    = { path = "zk", version = "0.1.1" }
+libveritas_zk    = { path = "zk", version = "0.1" }
 
 # External
 spaces_protocol  = { version = "0.1", features = ["std"] }
