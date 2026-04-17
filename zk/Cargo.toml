@@ -1,12 +1,17 @@
 [package]
 name = "libveritas_zk"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
-repository.workspace = true
-homepage.workspace = true
-authors.workspace = true
+# Pinned independently of the workspace. The guest under methods/guest/
+# depends on this crate via a path dep, so changes here can shift the
+# generated ELF / image ID — a consensus contract. DO NOT inherit
+# version.workspace, or release-plz will bump this on every workspace
+# release. Bump manually + run cargo publish when the ZK surface
+# actually changes.
+version = "0.1.1"
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
+repository = "https://github.com/spacesprotocol/libveritas"
+homepage = "https://spacesprotocol.org"
 description = "ZK guest types and helpers for libveritas."
 documentation = "https://docs.rs/libveritas_zk"
 keywords = ["spaces", "zk", "risc0"]
