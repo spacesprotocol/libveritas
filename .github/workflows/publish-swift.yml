@@ -3,7 +3,7 @@ name: Publish Swift (XCFramework)
 on:
   push:
     tags:
-      - "v*"
+      - "libveritas-v*"
   workflow_dispatch:
 
 permissions:
@@ -82,7 +82,7 @@ jobs:
           echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
           echo "XCFramework checksum: $CHECKSUM"
 
-          VERSION="${GITHUB_REF_NAME}"
+          VERSION="v${GITHUB_REF_NAME#libveritas-v}"
           if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
             VERSION="v0.0.0-dev.$(date +%Y%m%d%H%M%S)"
           fi

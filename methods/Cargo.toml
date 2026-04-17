@@ -1,7 +1,9 @@
 [package]
 name = "libveritas_methods"
-version = "0.1.2"
-edition = "2021"
+version.workspace = true
+edition = "2021"   # risc0 build environment is on 2021
+authors.workspace = true
+publish = false
 
 [build-dependencies]
 risc0-build = { version = "3.0.5" }

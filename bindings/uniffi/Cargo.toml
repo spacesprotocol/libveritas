@@ -1,14 +1,16 @@
 [package]
 name = "libveritas-uniffi"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+publish = false
 
 [lib]
 crate-type = ["cdylib", "staticlib", "lib"]
 name = "libveritas_uniffi"
 
 [dependencies]
-libveritas = { path = "../../veritas" }
+libveritas = { workspace = true }
 sip7 = { workspace = true }
 serde = { version = "1.0" }
 serde_json = "1.0"

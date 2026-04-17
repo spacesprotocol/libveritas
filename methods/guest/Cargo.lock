@@ -1210,8 +1210,9 @@ dependencies = [
 
 [[package]]
 name = "spacedb"
-version = "0.0.12"
-source = "git+https://github.com/spacesprotocol/spacedb.git#92c150ea5a368c7ec894ef3530992abd2f7d6012"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a48cda82e951391df9d0a54c96f8b04e117ff39abad5359b181cb71c80798d77"
 dependencies = [
  "borsh",
  "sha2",

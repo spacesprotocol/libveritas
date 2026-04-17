@@ -1,20 +1,20 @@
-use spacedb::subtree::SubTree;
-use spaces_nums::constants::COMMITMENT_FINALITY_INTERVAL;
-use spaces_nums::RootAnchor;
-use libveritas::{msg, SovereigntyState, Veritas};
-use spaces_protocol::sname::SName;
+use crate::{TestChain, TestDelegatedSpace, TestHandleTree};
 use libveritas::cert::{HandleSubtree, NumsSubtree, SpacesSubtree};
 use libveritas::msg::{Bundle, ChainProof};
-use crate::{TestChain, TestDelegatedSpace, TestHandleTree};
+use libveritas::{SovereigntyState, Veritas, msg};
+use spacedb::subtree::SubTree;
+use spaces_nums::RootAnchor;
+use spaces_nums::constants::COMMITMENT_FINALITY_INTERVAL;
+use spaces_protocol::sname::SName;
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub enum Step {
     Stage(&'static [&'static str]),
     Commit,
     Finalize,
 }
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct Fixture {
     pub name: &'static str,
     pub steps: Vec<Step>,
@@ -87,9 +87,9 @@ impl HandleStates {
     /// Expected sovereignty for a committed handle
     pub fn sovereignty(&self, handle: &str) -> Option<SovereigntyState> {
         if self.staged.iter().find(|&&s| s == handle).is_some() {
-            return Some(SovereigntyState::Dependent)
+            return Some(SovereigntyState::Dependent);
         }
-        
+
         let commit_idx = self.commit_index(handle)?;
         if commit_idx < self.finalized_count {
             Some(SovereigntyState::Sovereign)
@@ -101,7 +101,10 @@ impl HandleStates {
 
 impl Fixture {
     pub fn new(name: &'static str) -> Self {
-        Self { name, steps: vec![] }
+        Self {
+            name,
+            steps: vec![],
+        }
     }
 
     pub fn stage(mut self, handles: &'static [&'static str]) -> Self {
@@ -144,7 +147,11 @@ impl Fixture {
             }
         }
 
-        HandleStates { commits, staged, finalized_count }
+        HandleStates {
+            commits,
+            staged,
+            finalized_count,
+        }
     }
 }
 
@@ -154,6 +161,12 @@ pub struct ChainState {
     pub anchors: Vec<RootAnchor>,
 }
 
+impl Default for ChainState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ChainState {
     pub fn new() -> Self {
         Self {
@@ -161,15 +174,14 @@ impl ChainState {
             anchors: vec![],
         }
     }
-    
+
     pub fn veritas(&self) -> Veritas {
         let mut anchors = self.anchors.clone();
         if anchors.is_empty() {
             anchors.push(self.chain.current_root_anchor());
         }
         anchors.reverse();
-        Veritas::new()
-            .with_anchors(anchors).expect("valid anchors")
+        Veritas::new().with_anchors(anchors).expect("valid anchors")
     }
 
     pub fn message(&self, bundles: Vec<Bundle>) -> msg::Message {
@@ -185,7 +197,7 @@ impl ChainState {
 }
 
 #[derive(Clone)]
-pub struct FixtureRunner{
+pub struct FixtureRunner {
     pub fixture: Fixture,
     pub step: std::vec::IntoIter<Step>,
     pub space: TestDelegatedSpace,
@@ -222,14 +234,15 @@ impl FixtureRunner {
                 tree: HandleSubtree(c.handle_tree.clone()),
                 handles: vec![],
             };
-            for (_, handle) in &mut c.handles {
-                let signer = SName::join(&handle.name, &space_label)
-                    .expect("join handle name");
+            for handle in c.handles.values_mut() {
+                let signer = SName::join(&handle.name, &space_label).expect("join handle name");
                 // Add some off-chain data
                 handle.set_records(
-                    sip7::RecordSet::pack(vec![
-                        sip7::Record::txt("name", &[&handle.name.to_string()]),
-                    ]).expect("pack records"),
+                    sip7::RecordSet::pack(vec![sip7::Record::txt(
+                        "name",
+                        &[&handle.name.to_string()],
+                    )])
+                    .expect("pack records"),
                     &signer,
                 );
 
@@ -244,19 +257,20 @@ impl FixtureRunner {
         }
 
         let mut empty_epoch = msg::Epoch {
-            tree:  HandleSubtree(SubTree::empty()),
+            tree: HandleSubtree(SubTree::empty()),
             handles: vec![],
         };
         let staging = bundle.epochs.last_mut().unwrap_or(&mut empty_epoch);
 
-        for (_, staged) in &mut self.handles.staged {
-            let signer = SName::join(&staged.handle.name, &space_label)
-                .expect("join handle name");
+        for staged in self.handles.staged.values_mut() {
+            let signer = SName::join(&staged.handle.name, &space_label).expect("join handle name");
             // add some off-chain data
             staged.handle.set_records(
-                sip7::RecordSet::pack(vec![
-                    sip7::Record::txt("name", &[&staged.handle.name.to_string()]),
-                ]).expect("pack records"),
+                sip7::RecordSet::pack(vec![sip7::Record::txt(
+                    "name",
+                    &[&staged.handle.name.to_string()],
+                )])
+                .expect("pack records"),
                 &signer,
             );
             staging.handles.push(msg::Handle {
@@ -292,7 +306,7 @@ impl FixtureRunner {
     }
 
     pub fn run(&mut self, state: &mut ChainState) {
-        while  self.run_next(state).is_some() {}
+        while self.run_next(state).is_some() {}
     }
 }
 
@@ -302,15 +316,12 @@ impl FixtureRunner {
 
 /// No commitments, just staged handles. Temp certs need no exclusion proof.
 pub fn staged_only() -> Fixture {
-    Fixture::new("@staged")
-        .stage(&["alice", "bob"])
+    Fixture::new("@staged").stage(&["alice", "bob"])
 }
 
 /// Single commitment, not yet finalized. Handles are Pending.
 pub fn single_commit_pending() -> Fixture {
-    Fixture::new("@pending")
-        .stage(&["alice", "bob"])
-        .commit()
+    Fixture::new("@pending").stage(&["alice", "bob"]).commit()
 }
 
 /// Single commitment, finalized. Handles are Sovereign. No receipt needed.
@@ -398,7 +409,10 @@ mod tests {
         assert!(states.is_committed("alice"));
         assert_eq!(states.commit_index("alice"), Some(0));
         assert!(!states.has_pending_commit());
-        assert_eq!(states.sovereignty("alice"), Some(SovereigntyState::Sovereign));
+        assert_eq!(
+            states.sovereignty("alice"),
+            Some(SovereigntyState::Sovereign)
+        );
     }
 
     #[test]
@@ -411,12 +425,18 @@ mod tests {
 
         // alice is in finalized commit 0
         assert_eq!(states.commit_index("alice"), Some(0));
-        assert_eq!(states.sovereignty("alice"), Some(SovereigntyState::Sovereign));
+        assert_eq!(
+            states.sovereignty("alice"),
+            Some(SovereigntyState::Sovereign)
+        );
         assert!(!states.needs_receipt("alice"));
 
         // charlie is in pending commit 1
         assert_eq!(states.commit_index("charlie"), Some(1));
-        assert_eq!(states.sovereignty("charlie"), Some(SovereigntyState::Pending));
+        assert_eq!(
+            states.sovereignty("charlie"),
+            Some(SovereigntyState::Pending)
+        );
         assert!(states.needs_receipt("charlie"));
     }
 
@@ -430,12 +450,18 @@ mod tests {
 
         // Commit 0 (finalized): alice, bob
         assert_eq!(states.in_commit(0), &["alice", "bob"]);
-        assert_eq!(states.sovereignty("alice"), Some(SovereigntyState::Sovereign));
+        assert_eq!(
+            states.sovereignty("alice"),
+            Some(SovereigntyState::Sovereign)
+        );
         assert!(!states.needs_receipt("alice"));
 
         // Commit 1 (finalized): charlie, dave
         assert_eq!(states.in_commit(1), &["charlie", "dave"]);
-        assert_eq!(states.sovereignty("charlie"), Some(SovereigntyState::Sovereign));
+        assert_eq!(
+            states.sovereignty("charlie"),
+            Some(SovereigntyState::Sovereign)
+        );
         assert!(states.needs_receipt("charlie")); // commit > 0
 
         // Commit 2 (pending): eve, frank
@@ -447,6 +473,9 @@ mod tests {
         assert_eq!(states.staged, vec!["grace", "heidi"]);
         assert!(states.is_staged("grace"));
         assert!(!states.is_committed("grace"));
-        assert_eq!(states.sovereignty("grace"), Some(SovereigntyState::Dependent));
+        assert_eq!(
+            states.sovereignty("grace"),
+            Some(SovereigntyState::Dependent)
+        );
     }
 }

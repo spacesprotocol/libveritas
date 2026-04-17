@@ -2,12 +2,26 @@
 resolver = "2"
 members = ["methods", "zk", "veritas", "testutil", "bindings/wasm", "bindings/uniffi", "bindings/python"]
 
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
+repository = "https://github.com/spacesprotocol/libveritas"
+homepage = "https://spacesprotocol.org"
+authors = ["Buffrr <contact@buffrr.dev>"]
+
 [workspace.dependencies]
-spaces_protocol = { git = "https://github.com/spacesprotocol/spaces.git", branch = "subspaces", features = ["std"] }
-spaces_nums = { git = "https://github.com/spacesprotocol/spaces.git", branch = "subspaces",  features = ["std"] }
-sip7 = { git = "https://github.com/spacesprotocol/spaces.git", branch = "subspaces",  features = ["serde", "std"] }
-borsh_utils = { git = "https://github.com/spacesprotocol/spaces.git", branch = "subspaces" }
-spacedb = { git = "https://github.com/spacesprotocol/spacedb.git",  default-features = false, features = ["extras"] }
+# Internal crates
+libveritas       = { path = "veritas", version = "0.1.0" }
+libveritas_zk    = { path = "zk", version = "0.1.0" }
+
+# External
+spaces_protocol  = { version = "0.1", features = ["std"] }
+spaces_nums      = { version = "0.1", features = ["std"] }
+sip7             = { version = "0.1", features = ["serde", "std"] }
+borsh_utils      = { version = "0.1" }
+spacedb          = { version = "0.1", default-features = false, features = ["extras"] }
 
 # Always optimize; building and running the guest takes much longer without optimization.
 [profile.dev]
