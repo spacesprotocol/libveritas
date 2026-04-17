@@ -1,11 +1,13 @@
 [package]
 name = "libveritas_testutil"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+publish = false
 
 [dependencies]
-libveritas = { path = "../veritas" }
-libveritas_zk = { path = "../zk" }
+libveritas = { workspace = true }
+libveritas_zk = { workspace = true }
 sip7 = { workspace = true }
 spacedb = { workspace = true }
 spaces_protocol = { workspace = true }

@@ -1,11 +1,10 @@
+use crate::Zone;
+use crate::cert::{Certificate, NumsSubtree};
+use spaces_protocol::slabel::SLabel;
+use spaces_protocol::sname::{NameLike, SName, Subname};
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Mutex;
-use crate::cert::{Certificate, NumsSubtree};
-use crate::Zone;
-use spaces_protocol::slabel::SLabel;
-use spaces_protocol::sname::{NameLike, SName, Subname};
-
 
 /// Bidirectional name resolver for space handle hierarchies.
 ///
@@ -27,7 +26,8 @@ pub struct NameResolver {
 
 impl NameResolver {
     fn from_aliases(aliases: HashMap<SName, SLabel>) -> Self {
-        let reverse = aliases.iter()
+        let reverse = aliases
+            .iter()
             .map(|(handle, numeric)| (numeric.clone(), handle.clone()))
             .collect();
         Self { aliases, reverse }
@@ -40,9 +40,15 @@ impl NameResolver {
     pub fn from_certificates(certs: &[Certificate], nums: &NumsSubtree) -> Self {
         let mut aliases = HashMap::new();
         for cert in certs {
-            let Some(genesis_spk) = cert.genesis_spk() else { continue };
-            if cert.subject.space().is_none() { continue };
-            let Ok(Some(numout)) = nums.find_num(genesis_spk) else { continue };
+            let Some(genesis_spk) = cert.genesis_spk() else {
+                continue;
+            };
+            if cert.subject.space().is_none() {
+                continue;
+            };
+            let Ok(Some(numout)) = nums.find_num(genesis_spk) else {
+                continue;
+            };
             aliases.insert(cert.subject.clone(), numout.num.name.to_slabel());
         }
         Self::from_aliases(aliases)
@@ -73,7 +79,9 @@ impl NameResolver {
         }
 
         let labels: Vec<&[u8]> = name.iter().collect();
-        let Some(space) = name.space() else { return name.clone() };
+        let Some(space) = name.space() else {
+            return name.clone();
+        };
 
         let mut current = match build_2label(labels[count - 2], &space) {
             Some(n) => n,
@@ -105,12 +113,16 @@ impl NameResolver {
             return name.clone();
         }
 
-        let Some(space) = name.space() else { return name.clone() };
+        let Some(space) = name.space() else {
+            return name.clone();
+        };
         if !space.is_numeric() {
             return name.clone();
         }
 
-        let Some(subspace) = name.subspace() else { return name.clone() };
+        let Some(subspace) = name.subspace() else {
+            return name.clone();
+        };
         let sub_str = subspace.to_string();
 
         // Resolve the numeric space to a human-readable parent handle,
@@ -159,7 +171,8 @@ impl LookupEntry {
         if count == 0 {
             return None;
         }
-        let labels: Vec<String> = name.iter()
+        let labels: Vec<String> = name
+            .iter()
             .map(|l| std::str::from_utf8(l).unwrap_or("").to_string())
             .collect();
         let space = name.space()?;
@@ -211,9 +224,7 @@ pub struct Lookup {
 
 impl Lookup {
     pub fn new(names: Vec<SName>) -> Self {
-        let entries = names.iter()
-            .filter_map(|n| LookupEntry::new(n))
-            .collect();
+        let entries = names.iter().filter_map(LookupEntry::new).collect();
         Self {
             state: Mutex::new(LookupState {
                 entries,
@@ -225,7 +236,9 @@ impl Lookup {
     /// Returns the first batch of handles to look up.
     pub fn start(&self) -> Vec<SName> {
         let state = self.state.lock().unwrap();
-        state.entries.iter()
+        state
+            .entries
+            .iter()
             .filter_map(|e| e.current_handle())
             .collect()
     }
@@ -237,8 +250,14 @@ impl Lookup {
 
         for zone in zones {
             if let Some(alias) = &zone.alias {
-                state.resolver.aliases.insert(zone.canonical.clone(), alias.clone());
-                state.resolver.reverse.insert(alias.clone(), zone.canonical.clone());
+                state
+                    .resolver
+                    .aliases
+                    .insert(zone.canonical.clone(), alias.clone());
+                state
+                    .resolver
+                    .reverse
+                    .insert(alias.clone(), zone.canonical.clone());
             }
         }
 
@@ -246,15 +265,21 @@ impl Lookup {
             if entry.done {
                 continue;
             }
-            let Some(handle) = entry.current_handle() else { continue };
-            let Some(zone) = zones.iter().find(|z| z.canonical == handle) else { continue };
+            let Some(handle) = entry.current_handle() else {
+                continue;
+            };
+            let Some(zone) = zones.iter().find(|z| z.canonical == handle) else {
+                continue;
+            };
             match &zone.alias {
                 Some(alias) if entry.cursor > 0 => entry.advance(alias.clone()),
                 _ => entry.done = true,
             }
         }
 
-        state.entries.iter()
+        state
+            .entries
+            .iter()
             .filter(|e| !e.done)
             .filter_map(|e| e.current_handle())
             .collect()
@@ -271,12 +296,12 @@ impl Lookup {
 mod tests {
     use super::*;
     use crate::cert::{HandleSubtree, KeyHash, Witness};
+    use spacedb::NodeHasher;
     use spacedb::Sha256Hasher;
     use spacedb::subtree::{SubTree, ValueOrHash};
-    use spacedb::NodeHasher;
-    use spaces_nums::{Num, NumOut};
     use spaces_nums::num_id::NumId;
     use spaces_nums::snumeric::SNumeric;
+    use spaces_nums::{Num, NumOut};
     use spaces_protocol::bitcoin::ScriptBuf;
     use std::str::FromStr;
 
@@ -427,7 +452,10 @@ mod tests {
 
         let flat = SName::from_str("pancakes#822-88-22").unwrap();
         let expanded = flattener.expand(&flat);
-        assert_eq!(expanded, SName::from_str("pancakes.nested1.alice@bitcoin").unwrap());
+        assert_eq!(
+            expanded,
+            SName::from_str("pancakes.nested1.alice@bitcoin").unwrap()
+        );
     }
 
     #[test]
@@ -442,9 +470,7 @@ mod tests {
 
     #[test]
     fn lookup_2_labels_resolves_immediately() {
-        let lookup = Lookup::new(vec![
-            SName::from_str("alice@bitcoin").unwrap(),
-        ]);
+        let lookup = Lookup::new(vec![SName::from_str("alice@bitcoin").unwrap()]);
         let batch = lookup.start();
         assert_eq!(batch, vec![SName::from_str("alice@bitcoin").unwrap()]);
 
@@ -457,9 +483,7 @@ mod tests {
     #[test]
     fn lookup_3_labels() {
         // nested1.alice@bitcoin requires: alice@bitcoin → #800-12-12 → nested1#800-12-12
-        let lookup = Lookup::new(vec![
-            SName::from_str("nested1.alice@bitcoin").unwrap(),
-        ]);
+        let lookup = Lookup::new(vec![SName::from_str("nested1.alice@bitcoin").unwrap()]);
 
         let batch = lookup.start();
         assert_eq!(batch, vec![SName::from_str("alice@bitcoin").unwrap()]);
@@ -486,7 +510,10 @@ mod tests {
         let next = lookup.advance(&zones);
         assert_eq!(next, vec![SName::from_str("nested1#800-12-12").unwrap()]);
 
-        let zones2 = vec![make_zone("nested1#800-12-12", Some(SNumeric::new(822, 88, 22)))];
+        let zones2 = vec![make_zone(
+            "nested1#800-12-12",
+            Some(SNumeric::new(822, 88, 22)),
+        )];
         let next2 = lookup.advance(&zones2);
         assert_eq!(next2, vec![SName::from_str("pancakes#822-88-22").unwrap()]);
 
@@ -524,9 +551,7 @@ mod tests {
 
     #[test]
     fn lookup_single_label() {
-        let lookup = Lookup::new(vec![
-            SName::from_str("@bitcoin").unwrap(),
-        ]);
+        let lookup = Lookup::new(vec![SName::from_str("@bitcoin").unwrap()]);
 
         let names = lookup.start();
         assert_eq!(names[0], SName::from_str("@bitcoin").unwrap());
@@ -535,19 +560,18 @@ mod tests {
 
     #[test]
     fn lookup_expand_zones_at_end() {
-        let lookup = Lookup::new(vec![
-            SName::from_str("nested1.alice@bitcoin").unwrap(),
-        ]);
+        let lookup = Lookup::new(vec![SName::from_str("nested1.alice@bitcoin").unwrap()]);
 
         let _ = lookup.start();
         let zones = vec![make_zone("alice@bitcoin", Some(SNumeric::new(800, 12, 12)))];
         let _ = lookup.advance(&zones);
 
         // Now expand a zone with numeric handle
-        let mut zones_to_expand = vec![
-            make_zone("nested1#800-12-12", None),
-        ];
+        let mut zones_to_expand = vec![make_zone("nested1#800-12-12", None)];
         lookup.expand_zones(&mut zones_to_expand);
-        assert_eq!(zones_to_expand[0].handle, SName::from_str("nested1.alice@bitcoin").unwrap());
+        assert_eq!(
+            zones_to_expand[0].handle,
+            SName::from_str("nested1.alice@bitcoin").unwrap()
+        );
     }
 }

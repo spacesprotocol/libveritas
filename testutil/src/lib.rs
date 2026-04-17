@@ -5,7 +5,7 @@
 
 pub mod fixture;
 
-use bitcoin::hashes::{Hash as BitcoinHash};
+use bitcoin::hashes::Hash as BitcoinHash;
 use bitcoin::key::Keypair;
 use bitcoin::key::rand::Rng;
 use bitcoin::secp256k1::Secp256k1;
@@ -14,18 +14,21 @@ use bitcoin::{BlockHash, OutPoint, ScriptBuf, Txid};
 use borsh::{BorshDeserialize, BorshSerialize};
 use libveritas::cert::{HandleOut, HandleSubtree, KeyHash, NumsSubtree, Signature, SpacesSubtree};
 use libveritas::msg::{self, ChainProof, Message};
-use spaces_protocol::sname::{Subname, SName};
 use libveritas::{ProvableOption, SovereigntyState, Veritas, Zone, hash_signable_message};
 use risc0_zkvm::{FakeReceipt, InnerReceipt, Receipt, ReceiptClaim};
 use spacedb::Sha256Hasher;
 use spacedb::subtree::{ProofType, SubTree, ValueOrHash};
-use spaces_protocol::constants::{ChainAnchor};
+use spaces_nums::num_id::NumId;
+use spaces_nums::snumeric::SNumeric;
+use spaces_nums::{
+    CommitmentKey, CommitmentTipKey, DelegatorKey, FullNumOut, Num, NumOut, NumOutpointKey,
+    RootAnchor, rolling_hash,
+};
+use spaces_protocol::constants::ChainAnchor;
 use spaces_protocol::hasher::{KeyHasher, OutpointKey, SpaceKey};
 use spaces_protocol::slabel::SLabel;
+use spaces_protocol::sname::{SName, Subname};
 use spaces_protocol::{Covenant, FullSpaceOut, Space, SpaceOut};
-use spaces_nums::num_id::NumId;
-use spaces_nums::{CommitmentKey, FullNumOut, Num, NumOut, NumOutpointKey, CommitmentTipKey, RootAnchor, rolling_hash, DelegatorKey};
-use spaces_nums::snumeric::SNumeric;
 use std::collections::HashMap;
 use std::str::FromStr;
 // ─────────────────────────────────────────────────────────────────────────────
@@ -52,7 +55,7 @@ pub fn label(s: &str) -> Subname {
 }
 
 pub fn sign_zone(zone: &Zone, keypair: &Keypair) -> Signature {
-    sign_mesage(&zone.signing_bytes(), &keypair)
+    sign_mesage(&zone.signing_bytes(), keypair)
 }
 
 pub fn gen_p2tr_spk() -> (ScriptBuf, Keypair) {
@@ -227,7 +230,7 @@ impl TestNum {
     }
 
     pub fn id(&self) -> NumId {
-        self.fso.numout.num.id.clone()
+        self.fso.numout.num.id
     }
 
     pub fn outpoint_key(&self) -> NumOutpointKey {
@@ -269,7 +272,7 @@ impl TestChain {
 
     pub fn chain_proof(&self, anchor: &ChainAnchor) -> ChainProof {
         ChainProof {
-            anchor: anchor.clone(),
+            anchor: *anchor,
             spaces: SpacesSubtree(self.spaces_tree.clone()),
             nums: NumsSubtree(self.nums_tree.clone()),
         }
@@ -331,7 +334,7 @@ impl TestChain {
         self.nums_tree
             .insert(num.id().into(), ValueOrHash::Value(num.outpoint_bytes()))
             .expect("insert outpoint");
-        self.nums.insert(num.id().into(), num.clone());
+        self.nums.insert(num.id(), num.clone());
         num
     }
 
@@ -653,7 +656,7 @@ impl TestHandleTree {
 
         Message {
             chain: msg::ChainProof {
-                anchor: anchor.clone(),
+                anchor: *anchor,
                 spaces: SpacesSubtree(spaces_proof),
                 nums: NumsSubtree(nums_proof),
             },
@@ -715,7 +718,7 @@ impl TestHandleTree {
 
         Message {
             chain: msg::ChainProof {
-                anchor: anchor.clone(),
+                anchor: *anchor,
                 spaces: SpacesSubtree(spaces_proof),
                 nums: NumsSubtree(nums_proof),
             },
@@ -743,6 +746,5 @@ impl TestHandleTree {
 // ─────────────────────────────────────────────────────────────────────────────
 
 pub fn veritas_from_anchors(anchors: Vec<RootAnchor>) -> Veritas {
-    Veritas::new()
-        .with_anchors(anchors).expect("valid anchors")
+    Veritas::new().with_anchors(anchors).expect("valid anchors")
 }

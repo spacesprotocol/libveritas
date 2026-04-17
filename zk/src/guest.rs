@@ -1,9 +1,11 @@
+use crate::BatchReader;
 use alloc::vec::Vec;
 use borsh::{BorshDeserialize, BorshSerialize};
 use serde::{Deserialize, Serialize};
-use spacedb::{Hash, Sha256Hasher, subtree::{SubTree, ValueOrHash}, VerifyError, NodeHasher};
-use crate::BatchReader;
-
+use spacedb::{
+    Hash, NodeHasher, Sha256Hasher, VerifyError,
+    subtree::{SubTree, ValueOrHash},
+};
 
 #[derive(Clone, Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
 pub struct Commitment {
@@ -29,7 +31,12 @@ pub enum GuestError {
 
 pub type Result<T> = core::result::Result<T, GuestError>;
 
-pub fn run(subtree: Vec<u8>, input: Vec<u8>, policy_step: [u32; 8], policy_fold: [u32; 8]) -> Result<Commitment> {
+pub fn run(
+    subtree: Vec<u8>,
+    input: Vec<u8>,
+    policy_step: [u32; 8],
+    policy_fold: [u32; 8],
+) -> Result<Commitment> {
     let mut subtree: SubTree<Sha256Hasher> =
         borsh::from_slice(&subtree).expect("decoding subtree error");
 
@@ -37,19 +44,26 @@ pub fn run(subtree: Vec<u8>, input: Vec<u8>, policy_step: [u32; 8], policy_fold:
     let reader = BatchReader(&input);
 
     for entry in reader.iter() {
-        subtree.insert(
-            entry.handle.try_into().expect("32 byte subspace hash slice"),
-            ValueOrHash::Hash(entry.value_hash.try_into().expect("32 byte value hash slice")),
-        )
+        subtree
+            .insert(
+                entry
+                    .handle
+                    .try_into()
+                    .expect("32 byte subspace hash slice"),
+                ValueOrHash::Hash(
+                    entry
+                        .value_hash
+                        .try_into()
+                        .expect("32 byte value hash slice"),
+                ),
+            )
             .map_err(|e| match e {
-                spacedb::Error::Verify(e) => {
-                    match e {
-                        VerifyError::IncompleteProof => GuestError::IncompleteSubTree,
-                        VerifyError::KeyNotFound => GuestError::IncompleteSubTree,
-                        VerifyError::RootMismatch => GuestError::IncompleteSubTree,
-                        VerifyError::KeyExists => GuestError::KeyExists,
-                    }
-                }
+                spacedb::Error::Verify(e) => match e {
+                    VerifyError::IncompleteProof => GuestError::IncompleteSubTree,
+                    VerifyError::KeyNotFound => GuestError::IncompleteSubTree,
+                    VerifyError::RootMismatch => GuestError::IncompleteSubTree,
+                    VerifyError::KeyExists => GuestError::KeyExists,
+                },
                 _ => {
                     unreachable!("expected verify error")
                 }

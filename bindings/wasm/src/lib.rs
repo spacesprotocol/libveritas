@@ -8,16 +8,24 @@ use serde::Serialize;
 use spaces_nums::RootAnchor;
 
 #[wasm_bindgen(js_name = "VERIFY_DEFAULT")]
-pub fn verify_default() -> u32 { libveritas::VERIFY_DEFAULT }
+pub fn verify_default() -> u32 {
+    libveritas::VERIFY_DEFAULT
+}
 
 #[wasm_bindgen(js_name = "VERIFY_DEV_MODE")]
-pub fn verify_dev_mode() -> u32 { libveritas::VERIFY_DEV_MODE }
+pub fn verify_dev_mode() -> u32 {
+    libveritas::VERIFY_DEV_MODE
+}
 
 #[wasm_bindgen(js_name = "VERIFY_ENABLE_SNARK")]
-pub fn verify_enable_snark() -> u32 { libveritas::VERIFY_ENABLE_SNARK }
+pub fn verify_enable_snark() -> u32 {
+    libveritas::VERIFY_ENABLE_SNARK
+}
 
 #[wasm_bindgen(js_name = "SIG_PRIMARY_ZONE")]
-pub fn sig_primary_zone() -> u8 { sip7::SIG_PRIMARY_ZONE }
+pub fn sig_primary_zone() -> u8 {
+    sip7::SIG_PRIMARY_ZONE
+}
 
 /// Serialize through JSON to get human-readable serde output
 /// (hex hashes, string names, etc.) as a native JS object.
@@ -45,11 +53,9 @@ fn parse_data_update(entry: &JsValue) -> Result<builder::DataUpdateRequest, JsEr
     let handle = SName::from_str(&name)
         .map_err(|e| JsError::new(&format!("invalid name '{}': {}", name, e)))?;
 
-    let records = get_optional_bytes(entry, "records")
-        .map(sip7::RecordSet::new);
+    let records = get_optional_bytes(entry, "records").map(sip7::RecordSet::new);
 
-    let delegate_records = get_optional_bytes(entry, "delegateRecords")
-        .map(sip7::RecordSet::new);
+    let delegate_records = get_optional_bytes(entry, "delegateRecords").map(sip7::RecordSet::new);
 
     Ok(builder::DataUpdateRequest {
         handle,
@@ -73,6 +79,12 @@ pub struct QueryContext {
     inner: msg::QueryContext,
 }
 
+impl Default for QueryContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[wasm_bindgen]
 impl QueryContext {
     #[wasm_bindgen(constructor)]
@@ -86,8 +98,8 @@ impl QueryContext {
     /// If no requests are added, all handles in the message are verified.
     #[wasm_bindgen(js_name = "addRequest")]
     pub fn add_request(&mut self, handle: &str) -> Result<(), JsError> {
-        let sname = SName::from_str(handle)
-            .map_err(|e| JsError::new(&format!("invalid handle: {e}")))?;
+        let sname =
+            SName::from_str(handle).map_err(|e| JsError::new(&format!("invalid handle: {e}")))?;
         self.inner.add_request(sname);
         Ok(())
     }
@@ -119,17 +131,18 @@ fn trust_set_to_js(ts: &libveritas::TrustSet) -> Result<JsValue, JsError> {
         arr.copy_from(r);
         roots.push(&arr);
     }
-    js_sys::Reflect::set(&obj, &"roots".into(), &roots).map_err(|_| JsError::new("failed to set roots"))?;
+    js_sys::Reflect::set(&obj, &"roots".into(), &roots)
+        .map_err(|_| JsError::new("failed to set roots"))?;
     Ok(obj.into())
 }
 
 fn zone_from_js(val: &JsValue) -> Result<libveritas::Zone, JsError> {
-    let json = js_sys::JSON::stringify(val)
-        .map_err(|_| JsError::new("failed to stringify zone"))?;
-    let json_str = json.as_string()
+    let json =
+        js_sys::JSON::stringify(val).map_err(|_| JsError::new("failed to stringify zone"))?;
+    let json_str = json
+        .as_string()
         .ok_or_else(|| JsError::new("stringify returned non-string"))?;
-    serde_json::from_str(&json_str)
-        .map_err(|e| JsError::new(&format!("invalid zone: {e}")))
+    serde_json::from_str(&json_str).map_err(|e| JsError::new(&format!("invalid zone: {e}")))
 }
 
 /// A message containing chain proofs and handle data.
@@ -176,16 +189,22 @@ impl Message {
     pub fn set_records(&mut self, canonical: &str, records_bytes: &[u8]) -> Result<(), JsError> {
         let sname = SName::from_str(canonical)
             .map_err(|e| JsError::new(&format!("invalid canonical: {e}")))?;
-        self.inner.set_records(&sname, sip7::RecordSet::new(records_bytes.to_vec()));
+        self.inner
+            .set_records(&sname, sip7::RecordSet::new(records_bytes.to_vec()));
         Ok(())
     }
 
     /// Set delegate records on the message for a canonical name.
     #[wasm_bindgen(js_name = "setDelegateRecords")]
-    pub fn set_delegate_records(&mut self, canonical: &str, records_bytes: &[u8]) -> Result<(), JsError> {
+    pub fn set_delegate_records(
+        &mut self,
+        canonical: &str,
+        records_bytes: &[u8],
+    ) -> Result<(), JsError> {
         let sname = SName::from_str(canonical)
             .map_err(|e| JsError::new(&format!("invalid canonical: {e}")))?;
-        self.inner.set_delegate_records(&sname, sip7::RecordSet::new(records_bytes.to_vec()));
+        self.inner
+            .set_delegate_records(&sname, sip7::RecordSet::new(records_bytes.to_vec()));
         Ok(())
     }
 }
@@ -194,6 +213,12 @@ impl Message {
 #[wasm_bindgen]
 pub struct MessageBuilder {
     inner: Option<builder::MessageBuilder>,
+}
+
+impl Default for MessageBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[wasm_bindgen]
@@ -213,7 +238,8 @@ impl MessageBuilder {
     }
 
     fn inner_mut(&mut self) -> Result<&mut builder::MessageBuilder, JsError> {
-        self.inner.as_mut()
+        self.inner
+            .as_mut()
             .ok_or_else(|| JsError::new("builder already consumed by build()"))
     }
 
@@ -248,8 +274,8 @@ impl MessageBuilder {
     /// Add records for a handle (sip7 wire bytes).
     #[wasm_bindgen(js_name = "addRecords")]
     pub fn add_records(&mut self, handle: &str, records_bytes: &[u8]) -> Result<(), JsError> {
-        let sname = SName::from_str(handle)
-            .map_err(|e| JsError::new(&format!("invalid handle: {e}")))?;
+        let sname =
+            SName::from_str(handle).map_err(|e| JsError::new(&format!("invalid handle: {e}")))?;
         let records = sip7::RecordSet::new(records_bytes.to_vec());
         self.inner_mut()?.add_records(sname, records);
         Ok(())
@@ -421,11 +447,7 @@ impl Veritas {
     }
 
     /// Verify a message with default options.
-    pub fn verify(
-        &self,
-        ctx: &QueryContext,
-        msg: &Message,
-    ) -> Result<VerifiedMessage, JsError> {
+    pub fn verify(&self, ctx: &QueryContext, msg: &Message) -> Result<VerifiedMessage, JsError> {
         let inner = self
             .inner
             .verify(&ctx.inner, msg.inner.clone())
@@ -474,12 +496,15 @@ impl VerifiedMessage {
 
     /// All certificates as serialized byte arrays.
     pub fn certificates(&self) -> Vec<js_sys::Uint8Array> {
-        self.inner.certificates().map(|c| {
-            let bytes = c.to_bytes();
-            let arr = js_sys::Uint8Array::new_with_length(bytes.len() as u32);
-            arr.copy_from(&bytes);
-            arr
-        }).collect()
+        self.inner
+            .certificates()
+            .map(|c| {
+                let bytes = c.to_bytes();
+                let arr = js_sys::Uint8Array::new_with_length(bytes.len() as u32);
+                arr.copy_from(&bytes);
+                arr
+            })
+            .collect()
     }
 
     /// Get the verified message for rebroadcasting or updating.
@@ -507,10 +532,16 @@ impl Lookup {
     /// Create a lookup from an array of handle name strings.
     #[wasm_bindgen(constructor)]
     pub fn new(names: Vec<String>) -> Result<Lookup, JsError> {
-        let snames: Vec<SName> = names.iter()
-            .map(|n| SName::from_str(n).map_err(|e| JsError::new(&format!("invalid name '{}': {}", n, e))))
+        let snames: Vec<SName> = names
+            .iter()
+            .map(|n| {
+                SName::from_str(n)
+                    .map_err(|e| JsError::new(&format!("invalid name '{}': {}", n, e)))
+            })
             .collect::<Result<_, _>>()?;
-        Ok(Lookup { inner: libveritas::names::Lookup::new(snames) })
+        Ok(Lookup {
+            inner: libveritas::names::Lookup::new(snames),
+        })
     }
 
     /// Returns the first batch of handles to look up.
@@ -525,7 +556,12 @@ impl Lookup {
         let inner_zones: Vec<libveritas::Zone> = (0..array.length())
             .map(|i| zone_from_js(&array.get(i)))
             .collect::<Result<_, _>>()?;
-        Ok(self.inner.advance(&inner_zones).iter().map(|s| s.to_string()).collect())
+        Ok(self
+            .inner
+            .advance(&inner_zones)
+            .iter()
+            .map(|s| s.to_string())
+            .collect())
     }
 
     /// Expand zone handles using the alias map accumulated during resolution.
@@ -548,12 +584,18 @@ impl Lookup {
 ///
 /// Collects certificates from multiple verified messages into a single chain.
 #[wasm_bindgen(js_name = "createCertificateChain")]
-pub fn create_certificate_chain(subject: &str, cert_bytes_list: Vec<js_sys::Uint8Array>) -> Result<Vec<u8>, JsError> {
-    let sname = SName::from_str(subject)
-        .map_err(|e| JsError::new(&format!("invalid subject: {e}")))?;
-    let certs: Vec<libveritas::cert::Certificate> = cert_bytes_list.iter()
-        .map(|b| libveritas::cert::Certificate::from_slice(&b.to_vec())
-            .map_err(|e| JsError::new(&format!("invalid cert: {e}"))))
+pub fn create_certificate_chain(
+    subject: &str,
+    cert_bytes_list: Vec<js_sys::Uint8Array>,
+) -> Result<Vec<u8>, JsError> {
+    let sname =
+        SName::from_str(subject).map_err(|e| JsError::new(&format!("invalid subject: {e}")))?;
+    let certs: Vec<libveritas::cert::Certificate> = cert_bytes_list
+        .iter()
+        .map(|b| {
+            libveritas::cert::Certificate::from_slice(&b.to_vec())
+                .map_err(|e| JsError::new(&format!("invalid cert: {e}")))
+        })
         .collect::<Result<_, _>>()?;
     let chain = libveritas::cert::CertificateChain::new(sname, certs);
     Ok(chain.to_bytes())
@@ -563,7 +605,8 @@ pub fn create_certificate_chain(subject: &str, cert_bytes_list: Vec<js_sys::Uint
 
 fn parse_js_record(obj: &JsValue) -> Result<sip7::Record, JsError> {
     let rtype = js_sys::Reflect::get(obj, &"type".into())
-        .ok().and_then(|v| v.as_string())
+        .ok()
+        .and_then(|v| v.as_string())
         .ok_or_else(|| JsError::new("record must have a 'type' field"))?;
     match rtype.as_str() {
         "seq" => {
@@ -575,13 +618,16 @@ fn parse_js_record(obj: &JsValue) -> Result<sip7::Record, JsError> {
                 u64::try_from(js_sys::BigInt::from(raw))
                     .map_err(|_| JsError::new("seq record: 'version' out of u64 range"))?
             } else {
-                return Err(JsError::new("seq record: 'version' must be a number or bigint"));
+                return Err(JsError::new(
+                    "seq record: 'version' must be a number or bigint",
+                ));
             };
             Ok(sip7::Record::seq(version))
         }
         "txt" => {
             let key = js_sys::Reflect::get(obj, &"key".into())
-                .ok().and_then(|v| v.as_string())
+                .ok()
+                .and_then(|v| v.as_string())
                 .ok_or_else(|| JsError::new("txt record: 'key' must be a string"))?;
             let raw = js_sys::Reflect::get(obj, &"value".into())
                 .map_err(|_| JsError::new("txt record: 'value' is required"))?;
@@ -590,18 +636,24 @@ fn parse_js_record(obj: &JsValue) -> Result<sip7::Record, JsError> {
             } else if js_sys::Array::is_array(&raw) {
                 let arr = js_sys::Array::from(&raw);
                 (0..arr.length())
-                    .map(|i| arr.get(i).as_string()
-                        .ok_or_else(|| JsError::new("txt record: array values must be strings")))
+                    .map(|i| {
+                        arr.get(i)
+                            .as_string()
+                            .ok_or_else(|| JsError::new("txt record: array values must be strings"))
+                    })
                     .collect::<Result<Vec<_>, _>>()?
             } else {
-                return Err(JsError::new("txt record: 'value' must be a string or array of strings"));
+                return Err(JsError::new(
+                    "txt record: 'value' must be a string or array of strings",
+                ));
             };
             let refs: Vec<&str> = values.iter().map(|s| s.as_str()).collect();
             Ok(sip7::Record::txt(&key, &refs))
         }
         "addr" => {
             let key = js_sys::Reflect::get(obj, &"key".into())
-                .ok().and_then(|v| v.as_string())
+                .ok()
+                .and_then(|v| v.as_string())
                 .ok_or_else(|| JsError::new("addr record: 'key' must be a string"))?;
             let raw = js_sys::Reflect::get(obj, &"value".into())
                 .map_err(|_| JsError::new("addr record: 'value' is required"))?;
@@ -610,18 +662,24 @@ fn parse_js_record(obj: &JsValue) -> Result<sip7::Record, JsError> {
             } else if js_sys::Array::is_array(&raw) {
                 let arr = js_sys::Array::from(&raw);
                 (0..arr.length())
-                    .map(|i| arr.get(i).as_string()
-                        .ok_or_else(|| JsError::new("addr record: array values must be strings")))
+                    .map(|i| {
+                        arr.get(i).as_string().ok_or_else(|| {
+                            JsError::new("addr record: array values must be strings")
+                        })
+                    })
                     .collect::<Result<Vec<_>, _>>()?
             } else {
-                return Err(JsError::new("addr record: 'value' must be a string or array of strings"));
+                return Err(JsError::new(
+                    "addr record: 'value' must be a string or array of strings",
+                ));
             };
             let refs: Vec<&str> = values.iter().map(|s| s.as_str()).collect();
             Ok(sip7::Record::addr(&key, &refs))
         }
         "blob" => {
             let key = js_sys::Reflect::get(obj, &"key".into())
-                .ok().and_then(|v| v.as_string())
+                .ok()
+                .and_then(|v| v.as_string())
                 .ok_or_else(|| JsError::new("blob record: 'key' must be a string"))?;
             let value = js_sys::Reflect::get(obj, &"value".into())
                 .map(|v| js_sys::Uint8Array::from(v).to_vec())
@@ -630,13 +688,16 @@ fn parse_js_record(obj: &JsValue) -> Result<sip7::Record, JsError> {
         }
         "sig" => {
             let canonical = js_sys::Reflect::get(obj, &"canonical".into())
-                .ok().and_then(|v| v.as_string())
+                .ok()
+                .and_then(|v| v.as_string())
                 .ok_or_else(|| JsError::new("sig record: 'canonical' must be a string"))?;
             let handle = js_sys::Reflect::get(obj, &"handle".into())
-                .ok().and_then(|v| v.as_string())
+                .ok()
+                .and_then(|v| v.as_string())
                 .unwrap_or_default();
             let flags = js_sys::Reflect::get(obj, &"flags".into())
-                .ok().and_then(|v| v.as_f64())
+                .ok()
+                .and_then(|v| v.as_f64())
                 .unwrap_or(0.0) as u8;
             let sig = js_sys::Reflect::get(obj, &"sig".into())
                 .map(|v| js_sys::Uint8Array::from(v).to_vec())
@@ -653,8 +714,10 @@ fn parse_js_record(obj: &JsValue) -> Result<sip7::Record, JsError> {
         }
         "unknown" => {
             let rt = js_sys::Reflect::get(obj, &"rtype".into())
-                .ok().and_then(|v| v.as_f64())
-                .ok_or_else(|| JsError::new("unknown record: 'rtype' must be a number"))? as u8;
+                .ok()
+                .and_then(|v| v.as_f64())
+                .ok_or_else(|| JsError::new("unknown record: 'rtype' must be a number"))?
+                as u8;
             let rdata = js_sys::Reflect::get(obj, &"rdata".into())
                 .map(|v| js_sys::Uint8Array::from(v).to_vec())
                 .map_err(|_| JsError::new("unknown record: 'rdata' must be a Uint8Array"))?;
@@ -794,7 +857,9 @@ impl RecordSet {
     /// Wrap raw wire bytes (lazy — no parsing until unpack).
     #[wasm_bindgen(constructor)]
     pub fn new(data: &[u8]) -> RecordSet {
-        RecordSet { inner: sip7::RecordSet::new(data.to_vec()) }
+        RecordSet {
+            inner: sip7::RecordSet::new(data.to_vec()),
+        }
     }
 
     /// Pack records into wire format.
@@ -817,7 +882,9 @@ impl RecordSet {
 
     /// Parse all records.
     pub fn unpack(&self) -> Result<JsValue, JsError> {
-        let records = self.inner.unpack()
+        let records = self
+            .inner
+            .unpack()
             .map_err(|e| JsError::new(&format!("unpack failed: {e}")))?;
         let array = js_sys::Array::new();
         for record in &records {
@@ -839,7 +906,6 @@ impl RecordSet {
     }
 }
 
-
 /// Hash a message with the Spaces signed-message prefix (SHA256).
 /// Returns the 32-byte digest suitable for Schnorr signing/verification.
 #[wasm_bindgen(js_name = "hashSignableMessage")]
@@ -851,25 +917,28 @@ pub fn hash_signable_message(msg: &[u8]) -> Vec<u8> {
 /// Verify a Schnorr signature over a message using the Spaces signed-message prefix.
 #[wasm_bindgen(js_name = "verifySpacesMessage")]
 pub fn verify_spaces_message(msg: &[u8], signature: &[u8], pubkey: &[u8]) -> Result<(), JsError> {
-    let sig: [u8; 64] = signature.try_into()
+    let sig: [u8; 64] = signature
+        .try_into()
         .map_err(|_| JsError::new("signature must be 64 bytes"))?;
-    let pk: [u8; 32] = pubkey.try_into()
+    let pk: [u8; 32] = pubkey
+        .try_into()
         .map_err(|_| JsError::new("pubkey must be 32 bytes"))?;
-    libveritas::verify_spaces_message(msg, &sig, &pk)
-        .map_err(|e| JsError::new(&e.to_string()))
+    libveritas::verify_spaces_message(msg, &sig, &pk).map_err(|e| JsError::new(&e.to_string()))
 }
 
 /// Verify a raw Schnorr signature (no prefix, caller provides the 32-byte message hash).
 #[wasm_bindgen(js_name = "verifySchnorr")]
 pub fn verify_schnorr(msg_hash: &[u8], signature: &[u8], pubkey: &[u8]) -> Result<(), JsError> {
-    let hash: [u8; 32] = msg_hash.try_into()
+    let hash: [u8; 32] = msg_hash
+        .try_into()
         .map_err(|_| JsError::new("msg_hash must be 32 bytes"))?;
-    let sig: [u8; 64] = signature.try_into()
+    let sig: [u8; 64] = signature
+        .try_into()
         .map_err(|_| JsError::new("signature must be 64 bytes"))?;
-    let pk: [u8; 32] = pubkey.try_into()
+    let pk: [u8; 32] = pubkey
+        .try_into()
         .map_err(|_| JsError::new("pubkey must be 32 bytes"))?;
-    libveritas::verify_schnorr(&hash, &sig, &pk)
-        .map_err(|e| JsError::new(&e.to_string()))
+    libveritas::verify_schnorr(&hash, &sig, &pk).map_err(|e| JsError::new(&e.to_string()))
 }
 
 /// Decode stored zone bytes to a plain JS object.
@@ -892,7 +961,8 @@ pub fn zone_to_bytes(zone: JsValue) -> Result<Vec<u8>, JsError> {
 pub fn zone_is_better_than(a: JsValue, b: JsValue) -> Result<bool, JsError> {
     let inner_a = zone_from_js(&a)?;
     let inner_b = zone_from_js(&b)?;
-    inner_a.is_better_than(&inner_b)
+    inner_a
+        .is_better_than(&inner_b)
         .map_err(|e| JsError::new(&e.to_string()))
 }
 

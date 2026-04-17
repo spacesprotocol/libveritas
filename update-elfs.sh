@@ -59,7 +59,9 @@ cat > "${CONSTANTS_FILE}" << EOF
 // To update after changing guest programs, run:
 //   ./update-elfs.sh
 
+#[rustfmt::skip]
 pub const FOLD_ID: [u32; 8] = ${FOLD_U32};
+#[rustfmt::skip]
 pub const STEP_ID: [u32; 8] = ${STEP_U32};
 
 #[cfg(feature = "elf")]

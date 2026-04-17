@@ -1,3 +1,8 @@
+//! ZK guest types and helpers for [`libveritas`](https://docs.rs/libveritas).
+//!
+//! Defines the [`guest::Commitment`] proven by the RISC Zero guest programs
+//! and a [`BatchReader`] for reading the host-prepared input batches.
+
 extern crate alloc;
 extern crate core;
 
@@ -18,11 +23,9 @@ impl<'a> BatchReader<'a> {
     pub fn new(data: &'a [u8]) -> Self {
         BatchReader(data)
     }
-    
+
     pub fn iter(&self) -> BodyIterator<'a> {
-        BodyIterator {
-            data: &self.0,
-        }
+        BodyIterator { data: self.0 }
     }
 }
 

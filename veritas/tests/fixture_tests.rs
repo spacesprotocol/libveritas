@@ -1,9 +1,9 @@
-use spacedb::subtree::{ProofType};
 use libveritas::cert::{NumsSubtree, SpacesSubtree};
+use libveritas::msg::QueryContext;
 use libveritas::{ProvableOption, SovereigntyState};
-use libveritas::msg::{QueryContext};
+use libveritas_testutil::fixture::{ChainState, FixtureRunner, kitchen_sink};
+use spacedb::subtree::ProofType;
 use spaces_protocol::sname::NameLike;
-use libveritas_testutil::fixture::{kitchen_sink, ChainState, FixtureRunner};
 
 #[test]
 fn test_space_not_found_in_chain_proof() {
@@ -15,12 +15,19 @@ fn test_space_not_found_in_chain_proof() {
 
     // omit space from chain proof
     msg.chain.spaces = SpacesSubtree(
-        msg.chain.spaces.0
-        .prove(&[[0u8;32]], ProofType::Standard).expect("proving failed")
+        msg.chain
+            .spaces
+            .0
+            .prove(&[[0u8; 32]], ProofType::Standard)
+            .expect("proving failed"),
     );
     let veritas = state.veritas();
     let ctx = QueryContext::new();
-    assert!(veritas.verify_with_options(&ctx, msg, libveritas::VERIFY_DEV_MODE).is_err());
+    assert!(
+        veritas
+            .verify_with_options(&ctx, msg, libveritas::VERIFY_DEV_MODE)
+            .is_err()
+    );
 }
 
 #[test]
@@ -32,32 +39,38 @@ fn test_no_delegate_info_provided() {
     let initial_bundle = runner.build_bundle();
     let mut msg = state.message(vec![initial_bundle.clone()]);
     msg.chain.nums = NumsSubtree(
-        msg.chain.nums.0
-        .prove(&[[64u8;32]], ProofType::Standard).expect("proving failed")
+        msg.chain
+            .nums
+            .0
+            .prove(&[[64u8; 32]], ProofType::Standard)
+            .expect("proving failed"),
     );
     let veritas = state.veritas();
     let ctx = QueryContext::new();
-    let res = veritas.verify_with_options(&ctx, msg, libveritas::VERIFY_DEV_MODE).expect("valid");
+    let res = veritas
+        .verify_with_options(&ctx, msg, libveritas::VERIFY_DEV_MODE)
+        .expect("valid");
 
     assert_eq!(res.zones.len(), 1, "expected 1 zones");
     let zone = res.zones.first().unwrap();
     assert!(matches!(zone.delegate, ProvableOption::Unknown));
-    assert!(matches!(zone.sovereignty,  SovereigntyState::Sovereign));
-    assert!(!matches!(zone.commitment,  ProvableOption::Exists {..}));
+    assert!(matches!(zone.sovereignty, SovereigntyState::Sovereign));
+    assert!(!matches!(zone.commitment, ProvableOption::Exists { .. }));
 
     // Now create the message without omitting chain proofs
     let msg = state.message(vec![initial_bundle]);
     let mut ctx = QueryContext::new();
     ctx.add_zone(zone.clone());
 
-    let res = veritas.verify_with_options(&ctx, msg, libveritas::VERIFY_DEV_MODE).expect("valid");
+    let res = veritas
+        .verify_with_options(&ctx, msg, libveritas::VERIFY_DEV_MODE)
+        .expect("valid");
     assert_eq!(res.zones.len(), 1, "expected 1 zones");
     let zone = res.zones.first().unwrap();
     assert!(matches!(zone.delegate, ProvableOption::Exists { .. }));
-    assert!(matches!(zone.sovereignty,  SovereigntyState::Sovereign));
-    assert!(matches!(zone.commitment,  ProvableOption::Empty));
+    assert!(matches!(zone.sovereignty, SovereigntyState::Sovereign));
+    assert!(matches!(zone.commitment, ProvableOption::Empty));
 }
-
 
 #[test]
 fn test_kitchen_sink() {
@@ -67,24 +80,36 @@ fn test_kitchen_sink() {
 
     let mut runner = FixtureRunner::new(&mut state, fixture);
     runner.run(&mut state);
-    let latest_root = runner.handles.handle_tree.compute_root().expect("compute root");
+    let latest_root = runner
+        .handles
+        .handle_tree
+        .compute_root()
+        .expect("compute root");
 
     let bundle = runner.build_bundle();
     let msg = state.message(vec![bundle]);
 
     let ctx = QueryContext::new();
     let veritas = state.veritas();
-    let res = veritas.verify_with_options(&ctx, msg, libveritas::VERIFY_DEV_MODE).expect("valid");
+    let res = veritas
+        .verify_with_options(&ctx, msg, libveritas::VERIFY_DEV_MODE)
+        .expect("valid");
 
     assert_eq!(
         states.staged.len(),
-        res.zones.iter().filter(|z| z.sovereignty == SovereigntyState::Dependent).count()
+        res.zones
+            .iter()
+            .filter(|z| z.sovereignty == SovereigntyState::Dependent)
+            .count()
     );
 
-    let parent_zone = res.zones.iter().find(|z| z.handle.is_single_label())
+    let parent_zone = res
+        .zones
+        .iter()
+        .find(|z| z.handle.is_single_label())
         .expect("missing parent");
 
-    let ProvableOption::Exists { value : commitment } = &parent_zone.commitment else {
+    let ProvableOption::Exists { value: commitment } = &parent_zone.commitment else {
         panic!("commit should exist");
     };
 
@@ -95,9 +120,9 @@ fn test_kitchen_sink() {
         if zone.handle.is_single_label() {
             continue;
         }
-        let expected = states.sovereignty(
-            &zone.handle.subspace().unwrap().to_string()
-        ).expect("handle exists");
+        let expected = states
+            .sovereignty(&zone.handle.subspace().unwrap().to_string())
+            .expect("handle exists");
 
         assert_eq!(expected, zone.sovereignty);
     }

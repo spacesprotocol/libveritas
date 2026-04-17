@@ -3,7 +3,6 @@
 /// Outputs:
 ///   examples/fixture/anchors.json   - JSON array of RootAnchors
 ///   examples/fixture/message.bin    - borsh-encoded Message
-
 use libveritas::msg::QueryContext;
 use libveritas_testutil::fixture::{ChainState, FixtureRunner, single_commit_finalized};
 use std::fs;
@@ -41,7 +40,9 @@ fn main() {
     // Native verify to confirm the fixture is valid
     let veritas = state.veritas();
     let ctx = QueryContext::new();
-    let result = veritas.verify_with_options(&ctx, msg, libveritas::VERIFY_DEV_MODE).unwrap();
+    let result = veritas
+        .verify_with_options(&ctx, msg, libveritas::VERIFY_DEV_MODE)
+        .unwrap();
     println!("\nnative verify OK: {} zones", result.zones.len());
     for z in &result.zones {
         println!("  {} -> {}", z.handle, z.sovereignty);

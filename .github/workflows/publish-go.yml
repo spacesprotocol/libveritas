@@ -3,7 +3,7 @@ name: Publish Go bindings
 on:
   push:
     tags:
-      - "v*"
+      - "libveritas-v*"
   workflow_dispatch:
 
 permissions:
@@ -100,7 +100,7 @@ jobs:
 
       - name: Setup Go module
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${GITHUB_REF_NAME#libveritas-v}"
           if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
             VERSION="0.0.0-dev.$(date +%Y%m%d%H%M%S)"
           fi
@@ -116,7 +116,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GO_PUBLISH_TOKEN }}
         run: |
-          VERSION="${GITHUB_REF_NAME}"
+          VERSION="v${GITHUB_REF_NAME#libveritas-v}"
           if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
             VERSION="v0.0.0-dev.$(date +%Y%m%d%H%M%S)"
           fi

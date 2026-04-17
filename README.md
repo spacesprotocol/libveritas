@@ -1,5 +1,9 @@
 # Libveritas
 
+[![Crates.io](https://img.shields.io/crates/v/libveritas.svg)](https://crates.io/crates/libveritas)
+[![Docs.rs](https://docs.rs/libveritas/badge.svg)](https://docs.rs/libveritas)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 Stateless verification for Bitcoin handles using the [Spaces protocol](https://spacesprotocol.org).
 
 Similar to [BIP-353](https://en.bitcoin.it/wiki/BIP_0353), but replaces centralized ICANN signing keys with a permissionless trust anchor.
@@ -8,9 +12,8 @@ Similar to [BIP-353](https://en.bitcoin.it/wiki/BIP_0353), but replaces centrali
 
 ### Rust
 
-```toml
-[dependencies]
-libveritas = { git = "https://github.com/spacesprotocol/libveritas.git" }
+```bash
+cargo add libveritas
 ```
 
 ### JavaScript / Node.js

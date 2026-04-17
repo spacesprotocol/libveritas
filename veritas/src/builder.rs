@@ -1,12 +1,12 @@
-use std::collections::HashMap;
-use sip7::SIG_PRIMARY_ZONE;
+use crate::MessageError;
 use crate::cert::{Certificate, CertificateChain, ChainProofRequestUtils, Witness};
 use crate::msg::{ChainProof, Message, UnsignedRecordSet};
 use crate::names::NameResolver;
-use spaces_protocol::sname::{NameLike, SName};
-use crate::MessageError;
+use sip7::SIG_PRIMARY_ZONE;
 use spaces_nums::ChainProofRequest;
 use spaces_protocol::slabel::SLabel;
+use spaces_protocol::sname::{NameLike, SName};
+use std::collections::HashMap;
 
 pub struct DataUpdateRequest {
     pub handle: SName,
@@ -17,6 +17,12 @@ pub struct DataUpdateRequest {
 pub struct MessageBuilder {
     certs: Vec<Certificate>,
     updates: Vec<DataUpdateRequest>,
+}
+
+impl Default for MessageBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MessageBuilder {
@@ -81,7 +87,10 @@ impl MessageBuilder {
     /// Returns the message and unsigned record sets that need signing.
     /// Call `unsigned.signing_id()` to get the hash, sign it,
     /// then `unsigned.pack_sig(sig)` and `msg.set_records(canonical, signed)`.
-    pub fn build(self, chain: ChainProof) -> Result<(Message, Vec<UnsignedRecordSet>), MessageError> {
+    pub fn build(
+        self,
+        chain: ChainProof,
+    ) -> Result<(Message, Vec<UnsignedRecordSet>), MessageError> {
         let certs = dedup_root_certs(self.certs, &chain);
         let resolver = NameResolver::from_certificates(&certs, &chain.nums);
         let mut msg = Message::try_from_certificates(chain, certs)?;
@@ -143,14 +152,20 @@ impl Message {
 /// Resolve the block height for a root certificate's receipt by looking up
 /// its commitment in the chain proof's nums tree.
 fn root_cert_block_height(cert: &Certificate, chain: &ChainProof) -> u32 {
-    let Some(space) = cert.subject.space() else { return 0 };
+    let Some(space) = cert.subject.space() else {
+        return 0;
+    };
     let receipt = match &cert.witness {
         Witness::Root { receipt } => receipt.as_ref(),
         _ => return 0,
     };
     let Some(receipt) = receipt else { return 0 };
-    let Ok(zkc) = receipt.journal.decode::<libveritas_zk::guest::Commitment>() else { return 0 };
-    chain.nums.find_commitment(&space, zkc.final_root)
+    let Ok(zkc) = receipt.journal.decode::<libveritas_zk::guest::Commitment>() else {
+        return 0;
+    };
+    chain
+        .nums
+        .find_commitment(&space, zkc.final_root)
         .ok()
         .flatten()
         .map(|c| c.block_height)
@@ -173,7 +188,9 @@ fn dedup_root_certs(certs: Vec<Certificate>, chain: &ChainProof) -> Vec<Certific
         let space = cert.subject.space().unwrap();
         match best_roots.get(&space) {
             Some((_, existing_height)) if *existing_height >= height => continue,
-            _ => { best_roots.insert(space, (cert, height)); }
+            _ => {
+                best_roots.insert(space, (cert, height));
+            }
         }
     }
 

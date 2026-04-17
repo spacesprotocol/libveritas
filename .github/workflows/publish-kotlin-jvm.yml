@@ -3,7 +3,7 @@ name: Publish Kotlin JVM
 on:
   push:
     tags:
-      - "v*"
+      - "libveritas-v*"
   workflow_dispatch:
 
 permissions:
@@ -92,7 +92,7 @@ jobs:
 
       - name: Set version
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${GITHUB_REF_NAME#libveritas-v}"
           if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
             VERSION="0.0.0-dev.$(date +%Y%m%d%H%M%S)"
           fi
