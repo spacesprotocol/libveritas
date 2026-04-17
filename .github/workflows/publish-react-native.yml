@@ -56,7 +56,7 @@ jobs:
           if [[ ! "$GITHUB_REF" == refs/tags/* ]]; then
             VERSION="0.0.0-dev.$(date +%Y%m%d%H%M%S)"
           fi
-          npm version "$VERSION" --no-git-tag-version
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Install peer dependencies
         working-directory: bindings/react-native
