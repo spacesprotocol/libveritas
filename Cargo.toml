@@ -28,4 +28,8 @@ spacedb          = { version = "0.1", default-features = false, features = ["ext
 opt-level = 3
 
 [profile.release]
-lto = true
+lto = "fat"
+opt-level = "z"
+codegen-units = 1
+panic = "abort"
+strip = true

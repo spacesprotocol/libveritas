@@ -19,3 +19,7 @@ spaces_nums = { workspace = true }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
+
+[package.metadata.wasm-pack.profile.release]
+# Pass --enable-bulk-memory so newer rustc output validates, and -Oz for size.
+wasm-opt = ["-Oz", "--enable-bulk-memory", "--enable-mutable-globals", "--enable-sign-ext", "--enable-nontrapping-float-to-int"]
