@@ -61,14 +61,16 @@ name = "libveritas_zk"
 release = false
 publish = false
 
+[[package]]
+name = "libveritas_testutil"
+publish = true
+git_release_enable = true
+git_release_latest = false
+git_tag_name = "libveritas_testutil-v{{ version }}"
+
 # Non-publishable crates: skip versioning, changelog, and releases
 [[package]]
 name = "libveritas_methods"
-release = false
-publish = false
-
-[[package]]
-name = "libveritas_testutil"
 release = false
 publish = false
 
