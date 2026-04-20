@@ -321,7 +321,7 @@ pub fn verify_records(
     let msg = crate::hash_signable_message(signable.bytes);
     let sig = secp256k1::schnorr::Signature::from_slice(&sig_data.sig)
         .map_err(|_| crate::SignatureError::InvalidSignature)?;
-    secp256k1::Secp256k1::verification_only()
+    crate::secp256k1_verify_ctx()
         .verify_schnorr(&sig, &msg, &pubkey)
         .map_err(|_| crate::SignatureError::VerificationFailed)
 }
