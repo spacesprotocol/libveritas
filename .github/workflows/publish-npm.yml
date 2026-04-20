@@ -35,6 +35,9 @@ jobs:
             --out-dir ../../pkg \
             --out-name libveritas
 
+      - name: Report WASM size
+        run: ls -lh pkg/libveritas_bg.wasm
+
       - name: Add Node.js wrapper
         run: cp bindings/wasm/node.js pkg/node.js
 
