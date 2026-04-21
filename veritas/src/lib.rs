@@ -39,6 +39,7 @@ use spaces_protocol::sname::SName;
 use std::collections::HashSet;
 use std::fmt;
 use std::io::{Read, Write};
+use std::sync::OnceLock;
 
 pub mod builder;
 pub mod cert;
@@ -429,6 +430,16 @@ pub fn compute_trust_set(anchors: &[RootAnchor]) -> TrustSet {
     }
 }
 
+/// Cached verify-only secp256k1 context.
+///
+/// Creating a `Secp256k1` context allocates and pre-computes lookup tables;
+/// reuse this for bulk verification rather than calling
+/// `verification_only()` per-signature.
+pub(crate) fn secp256k1_verify_ctx() -> &'static secp256k1::Secp256k1<secp256k1::VerifyOnly> {
+    static CTX: OnceLock<secp256k1::Secp256k1<secp256k1::VerifyOnly>> = OnceLock::new();
+    CTX.get_or_init(secp256k1::Secp256k1::verification_only)
+}
+
 pub fn hash_signable_message(msg: &[u8]) -> secp256k1::Message {
     let mut engine = sha256::Hash::engine();
     engine.input(SPACES_SIGNED_MSG_PREFIX);
@@ -451,7 +462,7 @@ pub fn verify_spaces_message(
     let sig = secp256k1::schnorr::Signature::from_slice(signature)
         .map_err(|_| SignatureError::InvalidSignature)?;
     let hashed = hash_signable_message(msg);
-    secp256k1::Secp256k1::verification_only()
+    secp256k1_verify_ctx()
         .verify_schnorr(&sig, &hashed, &xonly)
         .map_err(|_| SignatureError::VerificationFailed)
 }
@@ -470,7 +481,7 @@ pub fn verify_schnorr(
     let sig = secp256k1::schnorr::Signature::from_slice(signature)
         .map_err(|_| SignatureError::InvalidSignature)?;
     let msg = secp256k1::Message::from_digest(*msg_hash);
-    secp256k1::Secp256k1::verification_only()
+    secp256k1_verify_ctx()
         .verify_schnorr(&sig, &msg, &xonly)
         .map_err(|_| SignatureError::VerificationFailed)
 }
@@ -531,7 +542,7 @@ impl Zone {
         let sig = secp256k1::schnorr::Signature::from_slice(&signature.0)
             .map_err(|_| SignatureError::InvalidSignature)?;
 
-        secp256k1::Secp256k1::verification_only()
+        secp256k1_verify_ctx()
             .verify_schnorr(&sig, &msg, &pubkey)
             .map_err(|_| SignatureError::VerificationFailed)
     }
