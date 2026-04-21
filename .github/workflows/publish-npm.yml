@@ -33,7 +33,13 @@ jobs:
           wasm-pack build bindings/wasm/ \
             --target web \
             --out-dir ../../pkg \
-            --out-name libveritas
+            --out-name libveritas \
+            -- \
+            --config 'profile.release.opt-level=3' \
+            --config 'profile.release.lto="fat"' \
+            --config 'profile.release.codegen-units=1' \
+            --config 'profile.release.panic="abort"' \
+            --config 'profile.release.strip=true'
 
       - name: Report WASM size
         run: ls -lh pkg/libveritas_bg.wasm

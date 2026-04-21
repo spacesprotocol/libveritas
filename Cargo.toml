@@ -26,10 +26,3 @@ spacedb          = { version = "0.1", default-features = false, features = ["ext
 # Always optimize; building and running the guest takes much longer without optimization.
 [profile.dev]
 opt-level = 3
-
-[profile.release]
-lto = "fat"
-opt-level = "z"
-codegen-units = 1
-panic = "abort"
-strip = true
