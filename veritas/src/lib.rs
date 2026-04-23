@@ -184,7 +184,10 @@ pub struct Zone {
     /// The block height of the anchor used to prove this zone (snapshot version).
     pub anchor: u32,
     /// Hash of the root anchor this zone was verified against.
-    #[serde(serialize_with = "serialize_hash", deserialize_with = "deserialize_hash")]
+    #[serde(
+        serialize_with = "serialize_hash",
+        deserialize_with = "deserialize_hash"
+    )]
     pub anchor_hash: Hash,
     /// The sovereignty state indicating finality of the zone's commitment.
     pub sovereignty: SovereigntyState,
