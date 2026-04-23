@@ -420,6 +420,7 @@ mod tests {
             delegate: crate::ProvableOption::Unknown,
             commitment: crate::ProvableOption::Unknown,
             num_id: None,
+            anchor_hash: [0u8; 32],
         }
     }
 

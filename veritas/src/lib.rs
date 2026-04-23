@@ -61,7 +61,6 @@ pub const VERIFY_ENABLE_SNARK: u32 = 1 << 1;
 /// Contains the verified zones and the original message data.
 /// The message can be used to construct certificates for storage.
 pub struct VerifiedMessage {
-    pub root_id: [u8; 32],
     pub zones: Vec<Zone>,
     pub message: msg::Message,
 }
@@ -184,6 +183,9 @@ impl fmt::Display for SovereigntyState {
 pub struct Zone {
     /// The block height of the anchor used to prove this zone (snapshot version).
     pub anchor: u32,
+    /// Hash of the root anchor this zone was verified against.
+    #[serde(serialize_with = "serialize_hash", deserialize_with = "deserialize_hash")]
+    pub anchor_hash: Hash,
     /// The sovereignty state indicating finality of the zone's commitment.
     pub sovereignty: SovereigntyState,
     /// Human-readable name (e.g., "nested1.alice@bitcoin").
@@ -355,6 +357,7 @@ impl<T: BorshDeserialize> BorshDeserialize for ProvableOption<T> {
 impl BorshSerialize for Zone {
     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
         BorshSerialize::serialize(&self.anchor, writer)?;
+        BorshSerialize::serialize(&self.anchor_hash, writer)?;
         BorshSerialize::serialize(&self.sovereignty, writer)?;
         BorshSerialize::serialize(&self.canonical, writer)?;
         BorshSerialize::serialize(&self.handle, writer)?;
@@ -371,6 +374,7 @@ impl BorshSerialize for Zone {
 impl BorshDeserialize for Zone {
     fn deserialize_reader<R: Read>(reader: &mut R) -> std::io::Result<Self> {
         let anchor = u32::deserialize_reader(reader)?;
+        let anchor_hash = <[u8; 32]>::deserialize_reader(reader)?;
         let sovereignty = SovereigntyState::deserialize_reader(reader)?;
         let canonical = SName::deserialize_reader(reader)?;
         let handle = SName::deserialize_reader(reader)?;
@@ -386,6 +390,7 @@ impl BorshDeserialize for Zone {
         let num_id = Option::<NumId>::deserialize_reader(reader)?;
         Ok(Zone {
             anchor,
+            anchor_hash,
             sovereignty,
             handle,
             canonical,
@@ -512,12 +517,13 @@ impl Zone {
 
     /// Returns the zone serialized for signing.
     ///
-    /// The `anchor` and `records` fields are zeroed out so delegate
-    /// signatures remain valid across different anchor snapshots and
-    /// don't include owner-signed records.
+    /// The `anchor`, `anchor_hash`, and `records` fields are zeroed out so
+    /// delegate signatures remain valid across different anchor snapshots
+    /// and don't include owner-signed records.
     pub fn signing_bytes(&self) -> Vec<u8> {
         let mut zone = self.clone();
         zone.anchor = 0;
+        zone.anchor_hash = [0u8; 32];
         zone.records = sip7::RecordSet::default();
         borsh::to_vec(&zone).expect("zone serialization should not fail")
     }
@@ -844,8 +850,12 @@ impl Veritas {
         let resolver = names::NameResolver::from_zones(&zones);
         resolver.expand_zones(&mut zones);
 
+        let anchor_hash = compute_root_id(&anchor);
+        for zone in &mut zones {
+            zone.anchor_hash = anchor_hash;
+        }
+
         Ok(VerifiedMessage {
-            root_id: compute_root_id(&anchor),
             zones,
             message: msg::Message {
                 chain: msg.chain,
@@ -1190,6 +1200,7 @@ impl Veritas {
             delegate: ProvableOption::Unknown,
             commitment: ProvableOption::Unknown,
             num_id,
+            anchor_hash: [0u8; 32],
         };
 
         // Verify records signature if present
@@ -1312,6 +1323,7 @@ fn verify_temporary_handle(
         delegate: ProvableOption::Unknown,
         commitment: ProvableOption::Unknown,
         num_id,
+        anchor_hash: [0u8; 32],
     };
 
     zone.verify_signature(handle.signature.as_ref().unwrap(), signer)
@@ -1399,6 +1411,7 @@ fn verify_final_handle(
         delegate: ProvableOption::Unknown,
         commitment: ProvableOption::Unknown,
         num_id: Some(num_id),
+        anchor_hash: [0u8; 32],
     };
 
     Ok(zone)
@@ -1644,6 +1657,31 @@ fn decode_journal(
             space: space.to_string(),
             reason: e.to_string(),
         })
+}
+
+fn serialize_hash<S>(hash: &Hash, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    if serializer.is_human_readable() {
+        serializer.serialize_str(&hex::encode(hash))
+    } else {
+        serializer.serialize_bytes(hash)
+    }
+}
+
+fn deserialize_hash<'de, D>(deserializer: D) -> Result<Hash, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    if deserializer.is_human_readable() {
+        let s: String = <String as Deserialize>::deserialize(deserializer)?;
+        let mut bytes = [0u8; 32];
+        hex::decode_to_slice(&s, &mut bytes).map_err(serde::de::Error::custom)?;
+        Ok(bytes)
+    } else {
+        <[u8; 32] as Deserialize>::deserialize(deserializer)
+    }
 }
 
 fn serialize_option_hash<S>(hash: &Option<Hash>, serializer: S) -> Result<S::Ok, S::Error>
