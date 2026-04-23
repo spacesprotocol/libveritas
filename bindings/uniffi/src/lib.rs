@@ -105,6 +105,7 @@ fn parse_data_updates(
 #[derive(uniffi::Record)]
 pub struct Zone {
     pub anchor: u32,
+    pub anchor_hash: Vec<u8>,
     pub sovereignty: String,
     pub handle: String,
     pub canonical: String,
@@ -120,6 +121,7 @@ pub struct Zone {
 fn zone_from_inner(z: &libveritas::Zone) -> Zone {
     Zone {
         anchor: z.anchor,
+        anchor_hash: z.anchor_hash.to_vec(),
         sovereignty: z.sovereignty.to_string(),
         handle: z.handle.to_string(),
         canonical: z.canonical.to_string(),
@@ -227,8 +229,18 @@ fn zone_to_inner(z: &Zone) -> Result<libveritas::Zone, VeritasError> {
         CommitmentState::Unknown => libveritas::ProvableOption::Unknown,
     };
 
+    let mut anchor_hash = [0u8; 32];
+    if z.anchor_hash.len() == 32 {
+        anchor_hash.copy_from_slice(&z.anchor_hash);
+    } else if !z.anchor_hash.is_empty() {
+        return Err(VeritasError::InvalidInput {
+            msg: format!("anchor_hash must be 32 bytes, got {}", z.anchor_hash.len()),
+        });
+    }
+
     Ok(libveritas::Zone {
         anchor: z.anchor,
+        anchor_hash,
         sovereignty: match z.sovereignty.as_str() {
             "sovereign" => libveritas::SovereigntyState::Sovereign,
             "pending" => libveritas::SovereigntyState::Pending,
@@ -874,10 +886,6 @@ pub struct VerifiedMessage {
 
 #[uniffi::export]
 impl VerifiedMessage {
-    pub fn root_id(&self) -> Vec<u8> {
-        self.inner.root_id.to_vec()
-    }
-
     pub fn zones(&self) -> Vec<Zone> {
         self.inner.zones.iter().map(zone_from_inner).collect()
     }

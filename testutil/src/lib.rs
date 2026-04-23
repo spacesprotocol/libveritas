@@ -533,6 +533,7 @@ impl TestHandleTree {
             delegate: ProvableOption::Unknown,
             commitment: ProvableOption::Unknown,
             num_id,
+            anchor_hash: [0u8; 32],
         };
 
         let signature = sign_zone(&zone, &self.ds.ptr.keypair);

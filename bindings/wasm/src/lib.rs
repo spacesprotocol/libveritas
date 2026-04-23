@@ -479,12 +479,6 @@ pub struct VerifiedMessage {
 
 #[wasm_bindgen]
 impl VerifiedMessage {
-    /// The root id this message was verified against.
-    #[wasm_bindgen(js_name = "rootId")]
-    pub fn root_id(&self) -> Vec<u8> {
-        self.inner.root_id.to_vec()
-    }
-
     /// All verified zones as plain JS objects.
     pub fn zones(&self) -> Result<JsValue, JsError> {
         let array = js_sys::Array::new();

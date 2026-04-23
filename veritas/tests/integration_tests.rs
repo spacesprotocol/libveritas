@@ -476,6 +476,7 @@ impl TestHandleTree {
             delegate: ProvableOption::Unknown,
             commitment: ProvableOption::Unknown,
             num_id,
+            anchor_hash: [0u8; 32],
         };
 
         let signature = sign_zone(&zone, &self.ds.ptr.keypair);
@@ -1006,6 +1007,7 @@ fn verify_uses_better_cached_zone() {
         delegate: ProvableOption::Unknown,
         commitment: ProvableOption::Unknown,
         num_id: None,
+        anchor_hash: [0u8; 32],
     };
 
     let ctx = QueryContext::from_zones(vec![cached_zone.clone()]);
