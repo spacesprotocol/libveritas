@@ -3,7 +3,7 @@ resolver = "2"
 members = ["methods", "zk", "veritas", "testutil", "bindings/wasm", "bindings/uniffi", "bindings/python"]
 
 [workspace.package]
-version = "0.1.4"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"
@@ -13,7 +13,7 @@ authors = ["Buffrr <contact@buffrr.dev>"]
 
 [workspace.dependencies]
 # Internal crates
-libveritas       = { path = "veritas", version = "0.1.4" }
+libveritas       = { path = "veritas", version = "0.2.0" }
 libveritas_zk    = { path = "zk", version = "0.1" }
 
 # External
