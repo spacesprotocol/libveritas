@@ -813,6 +813,46 @@ fn verify_root_finalized() {
     assert!(matches!(zone.delegate, ProvableOption::Exists { .. }));
 }
 
+// Records whose embedded signature does not verify are silently omitted from
+// the verified zone rather than hard-failing the whole message (permissive —
+// e.g. records left behind by a rotated key). The invariant that everything in
+// `Zone::records` is authentically owner-signed is preserved.
+#[test]
+fn invalid_owner_records_are_omitted_not_fatal() {
+    let f = Fixture::new();
+    let veritas = f.veritas();
+    let ctx = QueryContext::new();
+
+    // Owner records with the correct canonical name but a garbage signature, so
+    // verification reaches the schnorr check and fails there — the shape a
+    // stale/rotated-key signature produces.
+    let canonical = sname("@bitcoin");
+    let unsigned = msg::UnsignedRecordSet {
+        handle: canonical.clone(),
+        canonical: canonical.clone(),
+        flags: sip7::SIG_PRIMARY_ZONE,
+        records: sip7::RecordSet::new(sip7::Record::seq(1).pack().expect("pack seq")),
+        delegate: false,
+    };
+    let bad_records = unsigned.pack_sig(vec![0xABu8; 64]);
+
+    let mut message = f.finalized_message(&[]);
+    message.spaces[0].records = Some(bad_records);
+
+    // Must still verify (no hard fail) ...
+    let result = veritas
+        .verify_with_options(&ctx, message, libveritas::VERIFY_DEV_MODE)
+        .expect("invalid records must not fail verification");
+
+    // ... but the invalid records are dropped from the zone.
+    let zone = &result.zones[0];
+    assert_eq!(zone.handle, sname("@bitcoin"));
+    assert!(
+        zone.records.is_empty(),
+        "records with an invalid signature must be omitted from the verified zone"
+    );
+}
+
 #[test]
 fn verify_leaf_finalized() {
     let f = Fixture::new();
