@@ -2421,9 +2421,9 @@ checksum = "e8e2fb0f499abb4d162f2bedad68f5ef91a1682b5a03596ddb67efd37768d100"
 
 [[package]]
 name = "spacedb"
-version = "0.1.2"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a48cda82e951391df9d0a54c96f8b04e117ff39abad5359b181cb71c80798d77"
+checksum = "cf14a3d14c3dcc6b87d837e246d9de73ef24b0d83796a294ceaa82e8acf4e8c9"
 dependencies = [
  "borsh",
  "sha2",
