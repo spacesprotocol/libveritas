@@ -1252,15 +1252,14 @@ impl Veritas {
             anchor_hash: [0u8; 32],
         };
 
-        // Verify records signature if present
+        // Attach owner records only if their signature verifies; otherwise
+        // silently omit them (permissive — e.g. records signed by a rotated
+        // key). This preserves the invariant that everything in `records` is
+        // authentically owner-signed. inspect surfaces omitted sets.
         if let Some(records) = &bundle.records {
-            msg::verify_records(records, &z.script_pubkey, &z.canonical).map_err(|e| {
-                MessageError::RecordsInvalid {
-                    handle: z.handle.to_string(),
-                    reason: e.to_string(),
-                }
-            })?;
-            z.records = records.clone();
+            if msg::verify_records(records, &z.script_pubkey, &z.canonical).is_ok() {
+                z.records = records.clone();
+            }
         }
 
         // Without a trusted nums root, delegate and commitment cannot be
@@ -1276,12 +1275,11 @@ impl Veritas {
                 Some(delegate) => {
                     let mut delegate_records = sip7::RecordSet::default();
                     if let Some(records) = &bundle.delegate_records {
-                        msg::verify_records(records, &delegate.script_pubkey, &z.canonical)
-                            .map_err(|e| MessageError::RecordsInvalid {
-                                handle: z.handle.to_string(),
-                                reason: e.to_string(),
-                            })?;
-                        delegate_records = records.clone();
+                        if msg::verify_records(records, &delegate.script_pubkey, &z.canonical)
+                            .is_ok()
+                        {
+                            delegate_records = records.clone();
+                        }
                     }
                     z.delegate = ProvableOption::Exists {
                         value: Delegate {
@@ -1357,13 +1355,9 @@ fn verify_temporary_handle(
 
     let mut verified_records = sip7::RecordSet::default();
     if let Some(records) = &handle.records {
-        msg::verify_records(records, &handle.genesis_spk, subject).map_err(|e| {
-            MessageError::RecordsInvalid {
-                handle: subject.to_string(),
-                reason: e.to_string(),
-            }
-        })?;
-        verified_records = records.clone();
+        if msg::verify_records(records, &handle.genesis_spk, subject).is_ok() {
+            verified_records = records.clone();
+        }
     }
 
     let num_id = Some(NumId::from_spk::<KeyHash>(handle.genesis_spk.clone()));
@@ -1448,11 +1442,9 @@ fn verify_final_handle(
 
     let mut verified_records = sip7::RecordSet::default();
     if let Some(records) = &handle.records {
-        msg::verify_records(records, &spk, subject).map_err(|e| MessageError::RecordsInvalid {
-            handle: subject.to_string(),
-            reason: e.to_string(),
-        })?;
-        verified_records = records.clone();
+        if msg::verify_records(records, &spk, subject).is_ok() {
+            verified_records = records.clone();
+        }
     }
 
     let zone = Zone {

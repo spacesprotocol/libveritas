@@ -247,3 +247,64 @@ fn test_inspect_proof_shape() {
     assert!(json.contains("\"spaces_root\""));
     assert!(json.contains("\"steps\""));
 }
+
+// Records whose signature does not verify are omitted from the verified
+// message, and inspect is the channel that surfaces that omission (a synthetic
+// record injected into the set would break the "everything here is signed"
+// invariant and be spoofable, so the status lives in the report instead).
+#[cfg(feature = "inspect")]
+#[test]
+fn inspect_flags_invalid_records() {
+    use libveritas::inspect::{SigStatus, inspect};
+    use libveritas::msg::UnsignedRecordSet;
+    use spaces_protocol::sname::SName;
+
+    let mut state = ChainState::new();
+    let fixture = kitchen_sink();
+    let mut runner = FixtureRunner::new(&mut state, fixture);
+    runner.run(&mut state);
+
+    let mut bundle = runner.build_bundle();
+
+    // Owner records on the parent space zone with the correct canonical name
+    // but a garbage signature, so it cannot verify against the space key. (A
+    // fresh keypair would be unreliable here: testutil's keygen is
+    // deterministic and can collide with the fixture's own space key.)
+    let canonical = SName::from_space(&bundle.subject);
+    let unsigned = UnsignedRecordSet {
+        handle: canonical.clone(),
+        canonical: canonical.clone(),
+        flags: sip7::SIG_PRIMARY_ZONE,
+        records: sip7::RecordSet::pack(vec![sip7::Record::txt("name", &["nope"])])
+            .expect("pack records"),
+        delegate: false,
+    };
+    bundle.records = Some(unsigned.pack_sig(vec![0xABu8; 64]));
+
+    let msg = state.message(vec![bundle]);
+    let veritas = state.veritas();
+    let report = inspect(&veritas, &msg).expect("inspect");
+
+    // Parent owner records: present but flagged Invalid (i.e. omitted).
+    let parent = report
+        .zones
+        .iter()
+        .find(|z| z.handle == canonical.to_string())
+        .expect("parent zone");
+    assert_eq!(
+        parent.records.owner.as_ref().map(|r| r.signature),
+        Some(SigStatus::Invalid),
+        "inspect should flag records with a bad signature as Invalid"
+    );
+
+    // The fixture's genuinely owner-signed handle records are flagged Valid.
+    assert!(
+        report
+            .zones
+            .iter()
+            .filter(|z| z.parent.is_some())
+            .filter_map(|z| z.records.owner.as_ref())
+            .any(|r| r.signature == SigStatus::Valid),
+        "valid handle records should be flagged Valid"
+    );
+}

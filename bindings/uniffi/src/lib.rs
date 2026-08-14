@@ -13,7 +13,12 @@ uniffi::setup_scaffolding!();
 
 // -- Errors --
 
+// `flat_error`: lower the Display string (the `{msg}` detail) over the FFI so
+// it lands in the generated JS error's `.message` (and thus `toString()`/
+// `${e}`). Without it, ubrn's fielded-error template puts the detail only in
+// `.inner.msg` and `.message` is just "VeritasError.VerificationFailed".
 #[derive(Debug, thiserror::Error, uniffi::Error)]
+#[uniffi(flat_error)]
 pub enum VeritasError {
     #[error("{msg}")]
     InvalidInput { msg: String },

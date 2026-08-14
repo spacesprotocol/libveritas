@@ -17,10 +17,10 @@ libveritas       = { path = "veritas", version = "0.3.3" }
 libveritas_zk    = { path = "zk", version = "0.1" }
 
 # External
-spaces_protocol  = { version = "0.2.1", features = ["std"] }
-spaces_nums      = { version = "0.2.1", features = ["std"] }
-sip7             = { version = "0.2.1", features = ["serde", "std"] }
-borsh_utils      = { version = "0.2.1" }
+spaces_protocol  = { version = "0.3.0", features = ["std"] }
+spaces_nums      = { version = "0.3.0", features = ["std"] }
+sip7             = { version = "0.3.0", features = ["serde", "std"] }
+borsh_utils      = { version = "0.3.0" }
 spacedb          = { version = "0.1", default-features = false, features = ["extras"] }
 
 # Always optimize; building and running the guest takes much longer without optimization.

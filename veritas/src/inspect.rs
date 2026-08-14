@@ -2,7 +2,9 @@
 //!
 //! Walks the merkle subtrees touched during message verification and emits a
 //! JSON-serializable report (anchor + per-zone proof paths). Intended for
-//! offline visualizers — does not perform ZK or signature verification.
+//! offline visualizers. It checks record-set signatures (cheap schnorr) so it
+//! can flag sets omitted from the verified message, but does not perform ZK
+//! receipt verification.
 
 use crate::cert::{HandleSubtree, KeyHash, NumsSubtree, NumsValue, SpacesSubtree, SpacesValue};
 use crate::msg::{ChainProof, Message};
@@ -155,6 +157,24 @@ pub struct RecordSummary {
     pub canonical: String,
     /// Human-readable handle name the signature commits to.
     pub handle: String,
+    /// Signature status against the resolved signer key. `Invalid` sets are
+    /// omitted from the verified message — this is the only place their
+    /// presence is surfaced.
+    pub signature: SigStatus,
+}
+
+/// Verification status of a record set's embedded signature.
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SigStatus {
+    /// Signature verifies against the resolved signer key.
+    Valid,
+    /// A Sig record is present but does not verify — these records are omitted
+    /// from the verified message (e.g. signed by a rotated or foreign key).
+    Invalid,
+    /// The signer key could not be resolved offline, so the signature was not
+    /// checked.
+    Unchecked,
 }
 
 #[derive(Serialize, Deserialize, Copy, Clone, Debug)]
@@ -449,14 +469,29 @@ fn receipt_info(receipt: &risc0_zkvm::Receipt) -> Option<ReceiptInfo> {
     })
 }
 
-/// Summarize a record set's embedded Sig record (seq + signer identity).
-fn record_summary(records: &sip7::RecordSet) -> Option<RecordSummary> {
+/// Summarize a record set's embedded Sig record (seq + signer identity) and
+/// check its signature against `signer_spk` when a signer key can be resolved.
+/// Mirrors the omit-on-invalid behavior of verification so the report can flag
+/// sets that were dropped from the verified message.
+fn record_summary(
+    records: &sip7::RecordSet,
+    signer_spk: Option<&spaces_protocol::bitcoin::ScriptBuf>,
+    canonical: &SName,
+) -> Option<RecordSummary> {
     let sig = records.sig()?;
+    let signature = match signer_spk {
+        Some(spk) if crate::msg::verify_records(records, spk, canonical).is_ok() => {
+            SigStatus::Valid
+        }
+        Some(_) => SigStatus::Invalid,
+        None => SigStatus::Unchecked,
+    };
     Some(RecordSummary {
         seq: records.seq().unwrap_or(0),
         flags: sig.flags,
         canonical: sig.canonical.to_string(),
         handle: sig.handle.to_string(),
+        signature,
     })
 }
 
@@ -754,6 +789,15 @@ pub fn inspect(veritas: &Veritas, msg: &Message) -> Result<InspectReport, Inspec
             receipt_final_root,
         )?;
 
+        // Signer keys for record verification, mirroring extract_parent_zone:
+        // owner records are signed by the space/num key; delegate records by
+        // the delegate key resolved from the nums tree.
+        let owner_spk = parent_script_pubkey(&msg.chain, space);
+        let delegate_spk = owner_spk
+            .as_ref()
+            .and_then(|spk| msg.chain.nums.find_num(spk).ok().flatten())
+            .map(|n| n.script_pubkey);
+
         // Parent zone (the space itself): identity + its own tip commitment.
         // The space is on-chain, so it is always Sovereign (matching verify).
         zones.push(ZoneInspect {
@@ -767,8 +811,14 @@ pub fn inspect(veritas: &Veritas, msg: &Message) -> Result<InspectReport, Inspec
             sovereignty: Some(crate::SovereigntyState::Sovereign),
             receipt: receipt.clone(),
             records: RecordsInfo {
-                owner: bundle.records.as_ref().and_then(record_summary),
-                delegate: bundle.delegate_records.as_ref().and_then(record_summary),
+                owner: bundle
+                    .records
+                    .as_ref()
+                    .and_then(|r| record_summary(r, owner_spk.as_ref(), &parent_handle)),
+                delegate: bundle
+                    .delegate_records
+                    .as_ref()
+                    .and_then(|r| record_summary(r, delegate_spk.as_ref(), &parent_handle)),
             },
             paths: parent_paths.all(),
         });
@@ -862,6 +912,22 @@ pub fn inspect(veritas: &Veritas, msg: &Message) -> Result<InspectReport, Inspec
                         .unwrap_or(crate::SovereigntyState::Pending)
                 };
 
+                // Record signer key, mirroring verify_{temporary,final}_handle:
+                // temporary handles are signed by the genesis key; final
+                // handles by the rotated key from the nums tree (genesis
+                // fallback when no rotation is present).
+                let record_spk = if h.signature.is_some() {
+                    Some(h.genesis_spk.clone())
+                } else {
+                    msg.chain
+                        .nums
+                        .find_num(&h.genesis_spk)
+                        .ok()
+                        .flatten()
+                        .map(|n| n.script_pubkey)
+                        .or_else(|| Some(h.genesis_spk.clone()))
+                };
+
                 zones.push(ZoneInspect {
                     handle: subject.to_string(),
                     kind: ZoneKind::Handle,
@@ -869,7 +935,10 @@ pub fn inspect(veritas: &Veritas, msg: &Message) -> Result<InspectReport, Inspec
                     sovereignty: Some(sovereignty),
                     receipt: None,
                     records: RecordsInfo {
-                        owner: h.records.as_ref().and_then(record_summary),
+                        owner: h
+                            .records
+                            .as_ref()
+                            .and_then(|r| record_summary(r, record_spk.as_ref(), &subject)),
                         delegate: None,
                     },
                     paths,

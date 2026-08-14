@@ -501,9 +501,9 @@ dependencies = [
 
 [[package]]
 name = "borsh_utils"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a9716bbbca7bd5eb81c46151ef82ce10ebcf428f63397371284b2b705c28cb9"
+checksum = "afe6e88b898c9baea16d8f01a67b948c3816e48e96f779afd4a7932b03d1cac1"
 dependencies = [
  "bitcoin",
  "borsh",
@@ -2385,9 +2385,9 @@ dependencies = [
 
 [[package]]
 name = "sip7"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0ed9b8980298850d71acd2c96f55bef13a4e4d28d2976c503a86c69c791fd34"
+checksum = "b1c60c754d3958120c272c963e2333f4ea2f142f9832e5ffdd4cc04caa9ab946"
 dependencies = [
  "base64 0.22.1",
  "hex",
@@ -2421,9 +2421,9 @@ checksum = "e8e2fb0f499abb4d162f2bedad68f5ef91a1682b5a03596ddb67efd37768d100"
 
 [[package]]
 name = "spacedb"
-version = "0.1.2"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a48cda82e951391df9d0a54c96f8b04e117ff39abad5359b181cb71c80798d77"
+checksum = "cf14a3d14c3dcc6b87d837e246d9de73ef24b0d83796a294ceaa82e8acf4e8c9"
 dependencies = [
  "borsh",
  "sha2",
@@ -2431,9 +2431,9 @@ dependencies = [
 
 [[package]]
 name = "spaces_nums"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6b842f5b10f200e3c9548489657da4e889897183c72d35673f27d20c2ecb3be"
+checksum = "7995b967a9e479b52f11e4b6f165f3b0c07b58f3aa109234332a2a9fdbab4716"
 dependencies = [
  "bech32",
  "bitcoin",
@@ -2447,9 +2447,9 @@ dependencies = [
 
 [[package]]
 name = "spaces_protocol"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69f412ceb3e0a1ce5ca00a8cc7bb875cd614ba7ac809e4085502ec397e354a4a"
+checksum = "592c235dc5872d4d28564fa59e0c4035255042a60d0c77f3732df527f4485100"
 dependencies = [
  "bitcoin",
  "borsh",
