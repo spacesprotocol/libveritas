@@ -480,7 +480,9 @@ fn record_summary(
 ) -> Option<RecordSummary> {
     let sig = records.sig()?;
     let signature = match signer_spk {
-        Some(spk) if crate::msg::verify_records(records, spk, canonical).is_ok() => SigStatus::Valid,
+        Some(spk) if crate::msg::verify_records(records, spk, canonical).is_ok() => {
+            SigStatus::Valid
+        }
         Some(_) => SigStatus::Invalid,
         None => SigStatus::Unchecked,
     };
