@@ -22,6 +22,15 @@
 //!   the image IDs. Verifiers only need the image IDs and can skip this feature.
 //! - `inspect` — proof-path inspection for offline visualizers (the `inspect`
 //!   module). Off by default; adds no code to verifier builds.
+//!
+//! # Record verification
+//!
+//! Signed record sets attached to a zone are surfaced only when their embedded
+//! signature verifies against the zone's key. A set with an invalid signature
+//! (for example, one left behind by a rotated key) is silently omitted rather
+//! than failing the whole message, so the `records` on a verified [`Zone`] are
+//! always authentically owner-signed. With the `inspect` feature enabled,
+//! omitted sets are reported as `SigStatus::Invalid` so the drop stays visible.
 
 use crate::cert::{Certificate, KeyHash, Signature, Witness};
 use borsh::{BorshDeserialize, BorshSerialize};
