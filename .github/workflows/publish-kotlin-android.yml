@@ -34,6 +34,14 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v4
+        with:
+          # The action's default packages ("tools platform-tools") installs the
+          # legacy Android SDK Tools package, which Google removed from the SDK
+          # repo — `sdkmanager tools` now fails with "Failed to find package
+          # 'tools'". We don't need it (cargo-ndk uses the preinstalled NDK and
+          # Gradle fetches build-tools/platform itself), so install only
+          # platform-tools.
+          packages: "platform-tools"
 
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --version 3.5.4
