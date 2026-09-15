@@ -427,13 +427,12 @@ impl BorshDeserialize for Zone {
 }
 
 /// Compute a deterministic id for a single root anchor.
+///
+/// Delegates to [`spaces_nums::compute_root_id`] — the canonical byte layout
+/// that downstream verifiers (fabric, certrelay) rely on — so the two can
+/// never drift. The output is unchanged from the previous inline implementation.
 pub fn compute_root_id(root: &RootAnchor) -> [u8; 32] {
-    let mut engine = sha256::Hash::engine();
-    engine.input(&root.block.hash[..]);
-    engine.input(&root.block.height.to_le_bytes());
-    engine.input(&root.spaces_root);
-    engine.input(&root.nums_root.unwrap_or([0u8; 32]));
-    sha256::Hash::from_engine(engine).to_byte_array()
+    spaces_nums::compute_root_id(root)
 }
 
 /// A compact representation of a set of trusted anchors.
@@ -444,15 +443,15 @@ pub struct TrustSet {
 }
 
 /// Compute a trust set from anchors.
+///
+/// The `id` is the fold of the per-anchor root ids, delegated to
+/// [`spaces_nums::compute_trust_id`] so it stays byte-for-byte identical to the
+/// canonical layout (certrelay signs this id; it must not change). `roots` are
+/// the per-anchor ids, used by consumers for membership checks.
 pub fn compute_trust_set(anchors: &[RootAnchor]) -> TrustSet {
-    let roots: Vec<[u8; 32]> = anchors.iter().map(compute_root_id).collect();
-    let mut engine = sha256::Hash::engine();
-    for r in &roots {
-        engine.input(r);
-    }
     TrustSet {
-        id: sha256::Hash::from_engine(engine).to_byte_array(),
-        roots,
+        id: spaces_nums::compute_trust_id(anchors),
+        roots: anchors.iter().map(compute_root_id).collect(),
     }
 }
 
