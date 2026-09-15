@@ -1261,3 +1261,51 @@ fn temporary_cert_rejected_when_name_taken_by_other_key() {
         "expected HandleAlreadyExists, got: {err}"
     );
 }
+
+// libveritas's trust computation delegates to spaces_nums's canonical helpers.
+// This pins the output byte-for-byte so a future re-inline can't silently drift
+// from the layout certrelay signs (trust_set.id) and fabric checks (root ids).
+#[test]
+fn trust_set_matches_canonical_spaces_nums_layout() {
+    let mk = |h: u8, height: u32| RootAnchor {
+        spaces_root: [h; 32],
+        nums_root: Some([h.wrapping_add(1); 32]),
+        block: ChainAnchor {
+            hash: BlockHash::from_byte_array([h.wrapping_add(2); 32]),
+            height,
+        },
+    };
+    // Includes a nums_root = None anchor to pin the unwrap_or([0; 32]) branch.
+    let none_anchor = RootAnchor {
+        spaces_root: [9u8; 32],
+        nums_root: None,
+        block: ChainAnchor {
+            hash: BlockHash::from_byte_array([10u8; 32]),
+            height: 1,
+        },
+    };
+    let anchors = vec![mk(1, 100), mk(2, 99), none_anchor, mk(3, 98)];
+
+    for a in &anchors {
+        assert_eq!(
+            libveritas::compute_root_id(a),
+            spaces_nums::compute_root_id(a),
+            "compute_root_id drifted from canonical spaces_nums layout"
+        );
+    }
+
+    let ts = libveritas::compute_trust_set(&anchors);
+    assert_eq!(
+        ts.id,
+        spaces_nums::compute_trust_id(&anchors),
+        "trust_set.id drifted from canonical compute_trust_id (certrelay signs this)"
+    );
+    assert_eq!(
+        ts.roots,
+        anchors
+            .iter()
+            .map(spaces_nums::compute_root_id)
+            .collect::<Vec<_>>(),
+        "trust_set.roots drifted from canonical per-anchor root ids"
+    );
+}
