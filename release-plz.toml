@@ -68,6 +68,13 @@ git_release_enable = true
 git_release_latest = false
 git_tag_name = "libveritas_testutil-v{{ version }}"
 
+# libveritas_crossverify: not published yet. Flip to publish = true (with a
+# git_tag_name = "libveritas_crossverify-v{{ version }}") when ready for crates.io.
+[[package]]
+name = "libveritas_crossverify"
+release = false
+publish = false
+
 # Non-publishable crates: skip versioning, changelog, and releases
 [[package]]
 name = "libveritas_methods"

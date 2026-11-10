@@ -11,6 +11,9 @@ use std::str::FromStr;
 
 uniffi::setup_scaffolding!();
 
+#[cfg(feature = "crossverify")]
+mod crossverify;
+
 // -- Errors --
 
 // `flat_error`: lower the Display string (the `{msg}` detail) over the FFI so

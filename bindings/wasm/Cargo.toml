@@ -9,12 +9,17 @@ publish = false
 crate-type = ["cdylib"]
 
 [features]
+default = ["crossverify"]
+# Account claims and cross-platform checks (libveritas_crossverify). On by
+# default; build with --no-default-features to leave it out.
+crossverify = ["dep:libveritas_crossverify"]
 # Expose inspectProof(). Off by default; enable for visualizer builds:
 #   wasm-pack build --target web -- --features inspect
 inspect = ["libveritas/inspect"]
 
 [dependencies]
 libveritas = { workspace = true }
+libveritas_crossverify = { workspace = true, optional = true }
 sip7 = { workspace = true }
 serde = { version = "1.0" }
 serde_json = "1.0"
