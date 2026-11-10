@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["methods", "zk", "veritas", "testutil", "bindings/wasm", "bindings/uniffi", "bindings/python"]
+members = ["methods", "zk", "veritas", "testutil", "crossverify", "bindings/wasm", "bindings/uniffi", "bindings/python"]
 
 [workspace.package]
 version = "0.4.5"
@@ -15,12 +15,14 @@ authors = ["Buffrr <contact@buffrr.dev>"]
 # Internal crates
 libveritas       = { path = "veritas", version = "0.4.5" }
 libveritas_zk    = { path = "zk", version = "0.1" }
+libveritas_crossverify = { path = "crossverify", version = "0.1", default-features = false }
 
 # External
 spaces_protocol  = { version = "0.5.0", features = ["std"] }
 spaces_nums      = { version = "0.5.0", features = ["std"] }
 sip7             = { version = "0.5.0", features = ["serde", "std"] }
 borsh_utils      = { version = "0.5.0" }
+bitcoin          = { version = "0.32", default-features = false, features = ["std"] }
 spacedb          = { version = "0.1", default-features = false, features = ["extras"] }
 
 # Always optimize; building and running the guest takes much longer without optimization.

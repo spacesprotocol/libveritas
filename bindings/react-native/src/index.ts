@@ -13,6 +13,9 @@ if (!rustInstalled) {
 // Export the generated bindings to the app.
 export * from './generated/libveritas_uniffi';
 
+// Claim verification helpers (verifyClaim, verifyClaims, queryRelays).
+export * from './claims';
+
 // Now import the bindings so we can:
 // - intialize them
 // - export them as namespaced objects as the default export.

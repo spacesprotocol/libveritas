@@ -107,6 +107,29 @@ msg.update([
 const updatedBytes = msg.toBytes();
 ```
 
+### Verifying account claims
+
+A handle's records can claim accounts on other platforms
+(`github: ["buffrr", "id:41967894"]`). `verifyClaims` checks that each account
+points back at the handle, using React Native's `fetch` and `WebSocket`:
+
+```typescript
+import { zoneClaims, verifyClaims, ClaimOutcome_Tags } from "@spacesprotocol/react-native-libveritas";
+
+const claims = zoneClaims(zone);
+const outcomes = await verifyClaims(claims, zone.handle, {
+  onResult: (i, outcome) => {
+    if (outcome.tag === ClaimOutcome_Tags.Verified) showBadge(claims[i]);
+  },
+});
+```
+
+Always pass the verified `zone.handle`, never the handle field of a SIG record.
+Options: `context` (`trustedNotaries`, `nostrRelays`, ...), `fetch`,
+`queryRelays`, `timeoutMs`, `signal`, `maxConcurrent`. For full control, drive
+`ClaimCheck` yourself: `start()`, then `onResponse` / `onError` / `onEvents`
+until the step is `Done`.
+
 ## Building from source
 
 ### Prerequisites

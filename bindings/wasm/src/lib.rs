@@ -7,6 +7,9 @@ use libveritas::spaces_protocol::sname::SName;
 use serde::Serialize;
 use spaces_nums::RootAnchor;
 
+#[cfg(feature = "crossverify")]
+mod crossverify;
+
 #[wasm_bindgen(js_name = "VERIFY_DEFAULT")]
 pub fn verify_default() -> u32 {
     libveritas::VERIFY_DEFAULT

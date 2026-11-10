@@ -6,7 +6,8 @@ import init, * as wasm from './libveritas.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const bytes = readFileSync(join(__dirname, 'libveritas_bg.wasm'));
-await init(bytes);
+await init({ module_or_path: bytes });
 
 export * from './libveritas.js';
+export * from './claims.js';
 export default wasm;

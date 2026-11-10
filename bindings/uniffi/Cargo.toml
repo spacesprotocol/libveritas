@@ -9,8 +9,15 @@ publish = false
 crate-type = ["cdylib", "staticlib", "lib"]
 name = "libveritas_uniffi"
 
+[features]
+default = ["crossverify"]
+# Account claims and cross-platform checks (libveritas_crossverify). On by
+# default; build with --no-default-features to leave it out.
+crossverify = ["dep:libveritas_crossverify"]
+
 [dependencies]
 libveritas = { workspace = true }
+libveritas_crossverify = { workspace = true, optional = true }
 sip7 = { workspace = true }
 serde = { version = "1.0" }
 serde_json = "1.0"
